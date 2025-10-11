@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     console.log('Using credentials path:', credentialsPath);
 
     // Verificar que el archivo de credenciales existe
-    const fs = require('fs');
+    const fs = await import('fs');
     
     if (!fs.existsSync(credentialsPath)) {
       console.error('Credentials file not found:', credentialsPath);
@@ -50,8 +50,8 @@ export async function GET(request: Request) {
     
     // Filtrar sectores para el proyecto específico
     const projectSectors = rows
-      .filter((row: any[]) => row[0] === projectName)
-      .map((row: any[]) => ({
+      .filter((row: string[]) => row[0] === projectName)
+      .map((row: string[]) => ({
         sector: row[1] || '',
         cantidad: parseInt(row[2]) || 0,
         porcentaje: parseFloat(row[3]) || 0,
@@ -64,8 +64,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ sectors: projectSectors });
   } catch (error) {
     console.error('Error fetching sectors:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: `Failed to fetch sectors: ${error.message}` },
+      { error: `Failed to fetch sectors: ${errorMessage}` },
       { status: 500 }
     );
   }

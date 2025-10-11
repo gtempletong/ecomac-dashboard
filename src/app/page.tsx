@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, MapPin, TrendingUp, Eye } from 'lucide-react';
+import { Building2, MapPin, TrendingUp } from 'lucide-react';
 import ProjectTable from '@/components/ProjectTable';
 import ProjectModal from '@/components/ProjectModal';
 import type { Project, Sector } from '@/types/project';

@@ -11,7 +11,7 @@ export async function GET() {
     console.log('Using credentials path:', credentialsPath);
 
     // Verificar que el archivo de credenciales existe
-    const fs = require('fs');
+    const fs = await import('fs');
     
     if (!fs.existsSync(credentialsPath)) {
       console.error('Credentials file not found:', credentialsPath);
@@ -41,7 +41,7 @@ export async function GET() {
     // Mapeo correcto de columnas según el Google Sheet:
     // 0: Proyecto, 1: Ciudad, 2: Edificios, 3: Pisos, 4: Deptos/Piso
     // 5: UH Totales, 6: Estacionamientos, 7: Avance Ventas (%), 8: Avance Obra (%)
-    const projects = rows.map((row: any[]) => ({
+    const projects = rows.map((row: string[]) => ({
       proyecto: row[0] || '',
       ciudad: row[1] || '',
       edificios: parseInt(row[2]) || 0,
@@ -57,8 +57,9 @@ export async function GET() {
     return NextResponse.json({ projects });
   } catch (error) {
     console.error('Error fetching projects:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: `Failed to fetch projects: ${error.message}` },
+      { error: `Failed to fetch projects: ${errorMessage}` },
       { status: 500 }
     );
   }
