@@ -116,3 +116,4 @@ Para actualizar el dashboard:
 - **GitHub Repo**: https://github.com/gtempletong/ecomac-dashboard
 - **Google Sheet**: https://docs.google.com/spreadsheets/d/1MjdndQTXVV14Ta9UaIbJZ8Lx0jrDFqsk1fkx9LuP9ig
 
+
