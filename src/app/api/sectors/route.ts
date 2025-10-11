@@ -14,26 +14,49 @@ export async function GET(request: Request) {
       );
     }
 
-    // Hardcoded paths para evitar problemas con variables de entorno
-    const credentialsPath = path.resolve(process.cwd(), 'google_credentials.json');
+    // Usar variable de entorno en Vercel o archivo local en desarrollo
+    const credentialsJson = process.env.GOOGLE_CREDENTIALS_JSON;
     const spreadsheetId = '1MjdndQTXVV14Ta9UaIbJZ8Lx0jrDFqsk1fkx9LuP9ig';
 
-    console.log('Using credentials path:', credentialsPath);
+    console.log('Environment check:', { 
+      hasCredentialsEnv: !!credentialsJson, 
+      nodeEnv: process.env.NODE_ENV 
+    });
 
-    // Verificar que el archivo de credenciales existe
-    const fs = await import('fs');
+    let credentials;
     
-    if (!fs.existsSync(credentialsPath)) {
-      console.error('Credentials file not found:', credentialsPath);
-      return NextResponse.json(
-        { error: 'Credentials file not found' },
-        { status: 500 }
-      );
+    if (credentialsJson) {
+      // En Vercel: usar variable de entorno
+      try {
+        credentials = JSON.parse(credentialsJson);
+        console.log('Using environment credentials');
+      } catch (error) {
+        console.error('Error parsing credentials from env:', error);
+        return NextResponse.json(
+          { error: 'Invalid credentials format in environment' },
+          { status: 500 }
+        );
+      }
+    } else {
+      // En desarrollo: usar archivo local
+      const credentialsPath = path.resolve(process.cwd(), 'google_credentials.json');
+      const fs = await import('fs');
+      
+      if (!fs.existsSync(credentialsPath)) {
+        console.error('Credentials file not found:', credentialsPath);
+        return NextResponse.json(
+          { error: 'Credentials file not found' },
+          { status: 500 }
+        );
+      }
+      
+      credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+      console.log('Using local credentials file');
     }
 
     // Configurar autenticación
     const auth = new google.auth.GoogleAuth({
-      keyFile: credentialsPath,
+      credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     });
 
