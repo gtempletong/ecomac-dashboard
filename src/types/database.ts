@@ -173,7 +173,7 @@ export interface ResumenFondo {
   inversion_total_uf: number;
 }
 
-export interface EstadoLlamado {
+export interface ResumenLlamado {
   id: string;
   fondo_id: string;
   fondo_nombre: string;
@@ -321,7 +321,7 @@ export interface FondosFiltros {
 
 export interface LlamadosFiltros {
   fondo_id?: string;
-  estado?: EstadoLlamado[];
+  estado?: EstadoLlamado;
   tipo?: TipoLlamadoReparto[];
   fecha_desde?: string;
   fecha_hasta?: string;
