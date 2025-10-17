@@ -46,7 +46,7 @@ export const readSheet = async (sheetName: string) => {
     
     // Convertir a array de objetos
     const data = rows.slice(1).map(row => {
-      const obj: any = {};
+      const obj: Record<string, string | number> = {};
       headers.forEach((header, index) => {
         const value = row[index];
         // Intentar convertir a número si es posible
