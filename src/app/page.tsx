@@ -499,7 +499,7 @@ export default function Home() {
                     const proyecto = proyectos.find(p => p['ID Proyecto'] === caracteristica['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.Nombre || caracteristica['ID Proyecto']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || caracteristica['ID Proyecto']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{caracteristica['Edificios']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{caracteristica['Pisos']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{caracteristica['Deptos/Piso']}</td>
@@ -534,7 +534,7 @@ export default function Home() {
                     const proyecto = proyectos.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.Nombre || avance['ID Proyecto']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{avance['UH Promesadas']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{avance['UH Vendidas']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{avance['UH Stock']}</td>
@@ -565,7 +565,7 @@ export default function Home() {
                     const proyecto = proyectos.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.Nombre || avance['ID Proyecto']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{avance['Avance Obra (%)']}%</td>
                       </tr>
                     );
