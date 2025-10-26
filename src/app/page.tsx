@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Building2, TrendingUp, Users, DollarSign } from 'lucide-react';
 
 interface Fondo {
@@ -121,6 +122,8 @@ interface AporteAportante {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [fondos, setFondos] = useState<Fondo[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
   const [aportantes, setAportantes] = useState<Aportante[]>([]);
@@ -138,10 +141,19 @@ export default function Home() {
   const [selectedAportante, setSelectedAportante] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
+    // Verificar si hay sesión
+    const userData = localStorage.getItem('user');
+    if (!userData) {
+      router.push('/login');
+      return;
+    }
+    const parsedUser = JSON.parse(userData);
+    setUser(parsedUser);
+    fetchData(parsedUser);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (currentUser?: any) => {
     try {
       const [
         fondosRes, 
@@ -182,12 +194,33 @@ export default function Home() {
       const avanceObraData = await avanceObraRes.json();
       const poolFondosData = await poolFondosRes.json();
       const llamadosCapitalData = await llamadosCapitalRes.json();
-      const aportesAportanteData = await aportesAportanteRes.json();
+      
+      // El endpoint devuelve directamente el array, no un objeto
+      const aportesAportanteDataRaw = await aportesAportanteRes.json();
+      const aportesAportanteData = Array.isArray(aportesAportanteDataRaw) ? aportesAportanteDataRaw : [];
+      console.log('Aportes raw:', aportesAportanteDataRaw);
+      console.log('Aportes processed:', aportesAportanteData);
+      console.log('Total aportes:', aportesAportanteData.length);
+
+      // Si el usuario es "usuario" (no admin), filtrar datos por su RUT
+      const userRut = currentUser?.rut;
+      const isAdmin = currentUser?.role === 'admin';
+      console.log('Current user:', currentUser);
+      console.log('Is admin?', isAdmin);
 
       setFondos(fondosData.fondos || []);
       setSeries(seriesData.series || []);
-      setAportantes(aportantesData.aportantes || []);
-      setCompromisos(compromisosData.compromisos || []);
+      
+      // Filtrar por RUT si no es admin
+      if (isAdmin) {
+        setAportantes(aportantesData.aportantes || []);
+        setCompromisos(compromisosData.compromisos || []);
+      } else {
+        // Filtrar compromisos por RUT del usuario
+        const compromisosFiltrados = compromisosData.compromisos?.filter((c: any) => c['RUT Aportante'] === userRut) || [];
+        setCompromisos(compromisosFiltrados);
+        setAportantes([]); // No mostrar otros aportantes
+      }
       setInmobiliarias(inmobiliariasData.inmobiliarias || []);
       setProyectos(proyectosData.proyectos || []);
       setCaracteristicas(caracteristicasData.caracteristicas || []);
@@ -195,7 +228,24 @@ export default function Home() {
       setAvanceObra(avanceObraData.avanceObra || []);
       setPoolFondos(Array.isArray(poolFondosData) ? poolFondosData : []);
       setLlamadosCapital(Array.isArray(llamadosCapitalData) ? llamadosCapitalData : []);
-      setAportesAportante(Array.isArray(aportesAportanteData) ? aportesAportanteData : []);
+      
+      // Filtrar aportes por aportante si no es admin
+      console.log('Aportes recibidos:', aportesAportanteData);
+      console.log('Total aportes antes de filtrar:', aportesAportanteData.length);
+      if (isAdmin) {
+        console.log('Usuario es admin, mostrando todos los aportes');
+        setAportesAportante(aportesAportanteData);
+      } else {
+        console.log('Usuario NO es admin, filtrando por RUT:', userRut);
+        // Filtrar aportes por RUT del usuario
+        const aportesFiltrados = (aportesAportanteData || []).filter((a: any) => {
+          // Buscar el aportante en la tabla de aportantes
+          const aportante = (aportantesData.aportantes || []).find((ap: any) => a['ID Aportante'] === ap['ID Aportante']);
+          return aportante && String(aportante['RUT']) === String(userRut);
+        });
+        console.log('Aportes después de filtrar:', aportesFiltrados.length);
+        setAportesAportante(aportesFiltrados);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -238,8 +288,19 @@ export default function Home() {
               <Building2 className="h-8 w-8 text-blue-600" />
               <h1 className="ml-3 text-2xl font-bold text-gray-900">ECOMAC Dashboard</h1>
             </div>
+            <div className="flex items-center gap-4">
             <div className="text-sm text-gray-500">
-              Sistema de Gestión de Fondos de Inversión
+                {user?.nombre} ({user?.role})
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('user');
+                  router.push('/login');
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Cerrar sesión
+              </button>
             </div>
           </div>
         </div>
@@ -672,19 +733,36 @@ export default function Home() {
               >
                 Todos los Aportantes
               </button>
-              {aportantes.map(aportante => (
-                <button
-                  key={aportante['ID Aportante']}
-                  onClick={() => setSelectedAportante(aportante['ID Aportante'])}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                    selectedAportante === aportante['ID Aportante']
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {aportante['Nombre']}
-                </button>
-              ))}
+{(() => {
+                // Obtener los nombres únicos de los aportantes con aportes
+                const nombresUnicos = Array.from(new Set(
+                  aportesAportante.map(aporte => {
+                    const compromiso = compromisos.find(c => c['ID Aportante'] === aporte['ID Aportante']);
+                    return compromiso?.['Nombre Aportante'] || aporte['ID Aportante'];
+                  })
+                )).sort();
+                
+                return nombresUnicos.map((nombre, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      // Encontrar el ID del aportante por su nombre
+                      const compromiso = compromisos.find(c => c['Nombre Aportante'] === nombre);
+                      setSelectedAportante(compromiso?.['ID Aportante'] || null);
+                    }}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                      (() => {
+                        const compromiso = compromisos.find(c => c['Nombre Aportante'] === nombre);
+                        return selectedAportante === compromiso?.['ID Aportante']
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300';
+                      })()
+                    }`}
+                  >
+                    {nombre}
+                  </button>
+                ));
+              })()}
             </div>
           </div>
 
@@ -692,7 +770,10 @@ export default function Home() {
           <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
-                Aportes por Aportante {selectedAportante ? `- ${aportantes.find(a => a['ID Aportante'] === selectedAportante)?.Nombre}` : ''}
+                Aportes por Aportante {selectedAportante ? `- ${(() => {
+                  const compromiso = compromisos.find(c => c['ID Aportante'] === selectedAportante);
+                  return compromiso?.['Nombre Aportante'] || selectedAportante;
+                })()}` : ''}
               </h3>
             </div>
             <div className="overflow-x-auto">
@@ -714,13 +795,15 @@ export default function Home() {
                   {aportesAportante
                     .filter(aporte => !selectedAportante || aporte['ID Aportante'] === selectedAportante)
                     .map((aporte, index) => {
-                      const aportante = aportantes.find(a => a['ID Aportante'] === aporte['ID Aportante']);
+                      // Buscar el aportante en la tabla de compromisos si no está en aportantes
+                      const compromiso = compromisos.find(c => c['ID Aportante'] === aporte['ID Aportante']);
+                      const nombreAportante = compromiso?.['Nombre Aportante'] || aporte['ID Aportante'];
                       return (
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{aporte['ID Llamado']}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{aporte['Fondo']}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{aporte['Serie']}</td>
-                          <td className="px-6 py-4 text-sm text-gray-500">{aportante?.Nombre || aporte['ID Aportante']}</td>
+                          <td className="px-6 py-4 text-sm text-gray-500">{nombreAportante}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                             <span className={aporte['Monto (UF)'] < 0 ? 'text-red-600' : 'text-green-600'}>
                               {aporte['Monto (UF)']?.toLocaleString()}

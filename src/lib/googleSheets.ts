@@ -32,7 +32,7 @@ export const readSheet = async (sheetName: string) => {
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:ZZ10000`, // Lee todas las columnas hasta ZZ y 10000 filas
+      range: `${sheetName}!A:Z`, // Lee las columnas A-Z sin límite de filas
     });
 
     const rows = response.data.values || [];

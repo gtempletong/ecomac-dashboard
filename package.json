@@ -6,9 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate-password": "tsx script_generar_password.ts"
   },
   "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.3",
     "googleapis": "^162.0.0",
     "lucide-react": "^0.545.0",
@@ -27,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }
