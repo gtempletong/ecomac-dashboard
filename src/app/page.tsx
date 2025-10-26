@@ -212,7 +212,7 @@ export default function Home() {
         setCompromisos(compromisosData.compromisos || []);
       } else {
         // Filtrar compromisos por RUT del usuario
-        const compromisosFiltrados = compromisosData.compromisos?.filter((c: any) => c['RUT Aportante'] === userRut) || [];
+        const compromisosFiltrados = compromisosData.compromisos?.filter((c: Record<string, string | number>) => c['RUT Aportante'] === userRut) || [];
         setCompromisos(compromisosFiltrados);
         setAportantes([]); // No mostrar otros aportantes
       }
