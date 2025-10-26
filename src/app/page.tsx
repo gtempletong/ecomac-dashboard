@@ -123,7 +123,7 @@ interface AporteAportante {
 
 export default function Home() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<Record<string, string> | null>(null);
   const [fondos, setFondos] = useState<Fondo[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
   const [aportantes, setAportantes] = useState<Aportante[]>([]);
@@ -153,7 +153,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchData = async (currentUser?: any) => {
+  const fetchData = async (currentUser?: Record<string, string>) => {
     try {
       const [
         fondosRes, 
@@ -198,15 +198,10 @@ export default function Home() {
       // El endpoint devuelve directamente el array, no un objeto
       const aportesAportanteDataRaw = await aportesAportanteRes.json();
       const aportesAportanteData = Array.isArray(aportesAportanteDataRaw) ? aportesAportanteDataRaw : [];
-      console.log('Aportes raw:', aportesAportanteDataRaw);
-      console.log('Aportes processed:', aportesAportanteData);
-      console.log('Total aportes:', aportesAportanteData.length);
 
       // Si el usuario es "usuario" (no admin), filtrar datos por su RUT
       const userRut = currentUser?.rut;
       const isAdmin = currentUser?.role === 'admin';
-      console.log('Current user:', currentUser);
-      console.log('Is admin?', isAdmin);
 
       setFondos(fondosData.fondos || []);
       setSeries(seriesData.series || []);
@@ -230,20 +225,15 @@ export default function Home() {
       setLlamadosCapital(Array.isArray(llamadosCapitalData) ? llamadosCapitalData : []);
       
       // Filtrar aportes por aportante si no es admin
-      console.log('Aportes recibidos:', aportesAportanteData);
-      console.log('Total aportes antes de filtrar:', aportesAportanteData.length);
       if (isAdmin) {
-        console.log('Usuario es admin, mostrando todos los aportes');
         setAportesAportante(aportesAportanteData);
       } else {
-        console.log('Usuario NO es admin, filtrando por RUT:', userRut);
         // Filtrar aportes por RUT del usuario
-        const aportesFiltrados = (aportesAportanteData || []).filter((a: any) => {
+        const aportesFiltrados = (aportesAportanteData || []).filter((a: Record<string, string | number>) => {
           // Buscar el aportante en la tabla de aportantes
-          const aportante = (aportantesData.aportantes || []).find((ap: any) => a['ID Aportante'] === ap['ID Aportante']);
+          const aportante = (aportantesData.aportantes || []).find((ap: Record<string, string | number>) => a['ID Aportante'] === ap['ID Aportante']);
           return aportante && String(aportante['RUT']) === String(userRut);
         });
-        console.log('Aportes después de filtrar:', aportesFiltrados.length);
         setAportesAportante(aportesFiltrados);
       }
     } catch (error) {

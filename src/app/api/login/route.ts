@@ -14,11 +14,9 @@ export async function POST(request: Request) {
 
     // Leer usuarios de Google Sheets
     const usuarios = await readSheet('usuarios');
-    console.log('Usuarios encontrados:', usuarios);
     
     // Buscar usuario por email
-    const usuario = usuarios.find((u: any) => u.Email === email);
-    console.log('Usuario buscado:', usuario);
+    const usuario = usuarios.find((u: Record<string, string | number>) => u.Email === email);
     
     if (!usuario) {
       return NextResponse.json(
@@ -36,8 +34,6 @@ export async function POST(request: Request) {
     }
 
     // Verificar password (convertir ambos a string para comparar)
-    console.log('Password ingresado:', password, typeof password);
-    console.log('Password del usuario:', usuario.password, typeof usuario.password);
     if (String(password) !== String(usuario.password)) {
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
@@ -52,8 +48,6 @@ export async function POST(request: Request) {
       nombre: usuario.Nombre,
       role: usuario.Role || usuario.role // Intentar ambos nombres
     };
-    console.log('Usuario encontrado - Columnas disponibles:', Object.keys(usuario));
-    console.log('Usuario data a retornar:', userData);
     
     return NextResponse.json({ user: userData });
 
