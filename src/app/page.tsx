@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Building2, TrendingUp, Users, DollarSign } from 'lucide-react';
 
 interface Fondo {
@@ -126,7 +127,7 @@ export default function Home() {
   const [user, setUser] = useState<Record<string, string> | null>(null);
   const [fondos, setFondos] = useState<Fondo[]>([]);
   const [series, setSeries] = useState<Serie[]>([]);
-  const [aportantes, setAportantes] = useState<Aportante[]>([]);
+  const [, setAportantes] = useState<Aportante[]>([]);
   const [compromisos, setCompromisos] = useState<Compromiso[]>([]);
   const [inmobiliarias, setInmobiliarias] = useState<Inmobiliaria[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
@@ -137,8 +138,8 @@ export default function Home() {
   const [llamadosCapital, setLlamadosCapital] = useState<LlamadoCapital[]>([]);
   const [aportesAportante, setAportesAportante] = useState<AporteAportante[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFondo, setSelectedFondo] = useState<string | null>(null);
-  const [selectedAportante, setSelectedAportante] = useState<string | null>(null);
+  const [selectedFondo] = useState<string | null>(null);
+  const [selectedAportante] = useState<string | null>(null);
 
   useEffect(() => {
     // Verificar si hay sesión en sessionStorage (específico por pestaña)
@@ -273,8 +274,6 @@ export default function Home() {
     ? aportesAportante.reduce((sum, aporte) => sum + (aporte['Monto (UF)'] > 0 ? Number(aporte['Monto (UF)']) : 0), 0)
     : aportesAportante.reduce((sum, aporte) => sum + (aporte['Monto (UF)'] > 0 ? Number(aporte['Monto (UF)']) : 0), 0);
   
-  const avanceGeneral = capitalTotalComprometido > 0 ? (capitalPagado / capitalTotalComprometido) * 100 : 0;
-  
   // Para la tarjeta de aportantes, mostrar el total de capital comprometido
   const totalAportantesCapital = capitalTotalComprometido;
 
@@ -296,7 +295,7 @@ export default function Home() {
       : series;
   } else {
     // Usuario: filtrar por sus compromisos Y por fondo seleccionado
-    let baseFilter = series.filter(serie => seriesUnicasDelUsuario.includes(`${serie['Fondo']}-${serie['Serie']}`));
+    const baseFilter = series.filter(serie => seriesUnicasDelUsuario.includes(`${serie['Fondo']}-${serie['Serie']}`));
     
     if (selectedFondo) {
       seriesFiltradas = baseFilter.filter(serie => serie['Fondo'] === selectedFondo);
@@ -322,11 +321,7 @@ export default function Home() {
   // Para usuarios: filtrar proyectos, características, avances por pool
   const proyectosFiltrados = isAdmin 
     ? proyectos 
-    : proyectos.filter(proyecto => {
-      // Necesitamos buscar en qué pool está el proyecto
-      // Por ahora, mostrar todos los proyectos relacionados con los fondos del usuario
-      return true; // TODO: Implementar lógica de pool
-    });
+    : proyectos; // Mostrar todos los proyectos por ahora
   
   const caracteristicasFiltradas = isAdmin 
     ? caracteristicas 
@@ -552,9 +547,11 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow mb-8 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Estructura Pool 4</h2>
           <div className="flex justify-center">
-            <img 
+            <Image 
               src="/estructura-pool-4.png" 
               alt="Estructura Pool 4" 
+              width={1200}
+              height={800}
               className="max-w-full h-auto rounded-lg shadow-md"
             />
           </div>
