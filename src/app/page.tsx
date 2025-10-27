@@ -141,8 +141,8 @@ export default function Home() {
   const [selectedAportante, setSelectedAportante] = useState<string | null>(null);
 
   useEffect(() => {
-    // Verificar si hay sesión
-    const userData = localStorage.getItem('user');
+    // Verificar si hay sesión en sessionStorage (específico por pestaña)
+    const userData = sessionStorage.getItem('user');
     if (!userData) {
       router.push('/login');
       return;
@@ -284,7 +284,7 @@ export default function Home() {
               </div>
               <button
                 onClick={() => {
-                  localStorage.removeItem('user');
+                  sessionStorage.removeItem('user');
                   router.push('/login');
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"

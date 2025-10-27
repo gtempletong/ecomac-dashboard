@@ -25,8 +25,8 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Guardar sesión en localStorage
-        localStorage.setItem('user', JSON.stringify(data.user));
+        // Guardar sesión en sessionStorage (específico por pestaña)
+        sessionStorage.setItem('user', JSON.stringify(data.user));
         router.push('/');
       } else {
         setError(data.error || 'Credenciales inválidas');
@@ -104,4 +104,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
 
