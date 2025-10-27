@@ -139,7 +139,6 @@ export default function Home() {
   const [aportesAportante, setAportesAportante] = useState<AporteAportante[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFondo] = useState<string | null>(null);
-  const [selectedAportante] = useState<string | null>(null);
 
   useEffect(() => {
     // Verificar si hay sesión en sessionStorage (específico por pestaña)
@@ -253,10 +252,10 @@ export default function Home() {
   
   // Para usuarios no-admin, calcular métricas basadas solo en sus fondos
   const fondosUnicos = compromisos.length > 0 
-    ? Array.from(new Set(compromisos.map((c: Record<string, string | number>) => c['Fondo'])))
+    ? Array.from(new Set(compromisos.map(c => c['Fondo'])))
     : [];
   const seriesDelUsuario = compromisos.length > 0
-    ? Array.from(new Set(compromisos.map((c: Record<string, string | number>) => `${c['Fondo']}-${c['Serie']}`)))
+    ? Array.from(new Set(compromisos.map(c => `${c['Fondo']}-${c['Serie']}`)))
     : [];
   
   const totalFondos = isAdmin ? fondos.length : fondosUnicos.length;
@@ -266,7 +265,7 @@ export default function Home() {
   const capitalTotalComprometido = isAdmin 
     ? fondos.reduce((sum, fondo) => sum + (fondo['Capital Comprometido ($)'] || 0), 0)
     : compromisos.length > 0 
-      ? compromisos.reduce((sum, c: Record<string, string | number>) => sum + (Number(c['Capital Comprometido ($)']) || 0), 0)
+      ? compromisos.reduce((sum, c) => sum + (Number(c['Capital Comprometido ($)']) || 0), 0)
       : 0;
   
   // Capital pagado = suma de todos los aportes (montos positivos) hasta la fecha
@@ -285,7 +284,7 @@ export default function Home() {
       : [];
   
   // Filtrar series por fondo seleccionado Y por compromisos del usuario (para no-admin)
-  const seriesUnicasDelUsuario = Array.from(new Set(compromisos.map((c: Record<string, string | number>) => `${c['Fondo']}-${c['Serie']}`)));
+  const seriesUnicasDelUsuario = Array.from(new Set(compromisos.map(c => `${c['Fondo']}-${c['Serie']}`)));
   
   let seriesFiltradas;
   if (isAdmin) {
@@ -316,7 +315,7 @@ export default function Home() {
       : [];
 
   // Obtener IDs únicos de pools
-  const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map((p: Record<string, string | number>) => p['ID Pool'])));
+  const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['ID Pool'])));
   
   // Para usuarios: filtrar proyectos, características, avances por pool
   const proyectosFiltrados = isAdmin 
@@ -325,19 +324,19 @@ export default function Home() {
   
   const caracteristicasFiltradas = isAdmin 
     ? caracteristicas 
-    : caracteristicas.filter((c: Record<string, string | number>) => 
+    : caracteristicas.filter(c => 
       proyectosFiltrados.some(p => p['ID Proyecto'] === c['ID Proyecto'])
     );
   
   const avanceVentasFiltradas = isAdmin 
     ? avanceVentas 
-    : avanceVentas.filter((a: Record<string, string | number>) => 
+    : avanceVentas.filter(a => 
       proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
     );
   
   const avanceObraFiltradas = isAdmin 
     ? avanceObra 
-    : avanceObra.filter((a: Record<string, string | number>) => 
+    : avanceObra.filter(a => 
       proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
     );
 
