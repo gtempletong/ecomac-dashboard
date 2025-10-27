@@ -10,3 +10,4 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to read data' }, { status: 500 });
   }
 }
+

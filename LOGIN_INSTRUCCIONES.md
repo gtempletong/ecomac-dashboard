@@ -69,3 +69,5 @@ Una vez que el login funciona, necesitamos modificar las APIs para:
 - Si `role = admin` → devolver TODO
 - Si `role = usuario` → filtrar por RUT del usuario
 
+
+

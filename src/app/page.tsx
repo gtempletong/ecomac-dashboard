@@ -212,7 +212,11 @@ export default function Home() {
         setCompromisos(compromisosData.compromisos || []);
       } else {
         // Filtrar compromisos por RUT del usuario
-        const compromisosFiltrados = compromisosData.compromisos?.filter((c: Record<string, string | number>) => c['RUT Aportante'] === userRut) || [];
+        const compromisosFiltrados = compromisosData.compromisos?.filter((c: Record<string, string | number>) => {
+          const rutAportante = String(c['RUT Aportante']).trim();
+          const userRutStr = String(userRut).trim();
+          return rutAportante === userRutStr;
+        }) || [];
         setCompromisos(compromisosFiltrados);
         setAportantes([]); // No mostrar otros aportantes
       }
@@ -244,21 +248,103 @@ export default function Home() {
   };
 
   // Calcular métricas generales
-  const totalFondos = fondos.length;
-  const totalSeries = series.length;
-  const totalAportantes = aportantes.length;
-  const capitalTotalComprometido = fondos.reduce((sum, fondo) => sum + (fondo['Capital Comprometido ($)'] || 0), 0);
-  const capitalTotalRealizado = fondos.reduce((sum, fondo) => sum + (fondo['Capital Realizado ($)'] || 0), 0);
-  const avanceGeneral = capitalTotalComprometido > 0 ? (capitalTotalRealizado / capitalTotalComprometido) * 100 : 0;
+  const isAdmin = user?.role === 'admin';
+  
+  // Para usuarios no-admin, calcular métricas basadas solo en sus fondos
+  const fondosUnicos = compromisos.length > 0 
+    ? Array.from(new Set(compromisos.map((c: Record<string, string | number>) => c['Fondo'])))
+    : [];
+  const seriesDelUsuario = compromisos.length > 0
+    ? Array.from(new Set(compromisos.map((c: Record<string, string | number>) => `${c['Fondo']}-${c['Serie']}`)))
+    : [];
+  
+  const totalFondos = isAdmin ? fondos.length : fondosUnicos.length;
+  const totalSeries = isAdmin ? series.length : seriesDelUsuario.length;
+  
+  // Capital comprometido basado en compromisos del usuario
+  const capitalTotalComprometido = isAdmin 
+    ? fondos.reduce((sum, fondo) => sum + (fondo['Capital Comprometido ($)'] || 0), 0)
+    : compromisos.length > 0 
+      ? compromisos.reduce((sum, c: Record<string, string | number>) => sum + (Number(c['Capital Comprometido ($)']) || 0), 0)
+      : 0;
+  
+  // Capital pagado = suma de todos los aportes (montos positivos) hasta la fecha
+  const capitalPagado = isAdmin
+    ? aportesAportante.reduce((sum, aporte) => sum + (aporte['Monto (UF)'] > 0 ? Number(aporte['Monto (UF)']) : 0), 0)
+    : aportesAportante.reduce((sum, aporte) => sum + (aporte['Monto (UF)'] > 0 ? Number(aporte['Monto (UF)']) : 0), 0);
+  
+  const avanceGeneral = capitalTotalComprometido > 0 ? (capitalPagado / capitalTotalComprometido) * 100 : 0;
+  
+  // Para la tarjeta de aportantes, mostrar el total de capital comprometido
+  const totalAportantesCapital = capitalTotalComprometido;
 
-  // Filtrar series y compromisos por fondo seleccionado
-  const seriesFiltradas = selectedFondo 
-    ? series.filter(serie => serie['Fondo'] === selectedFondo)
-    : series;
+  // Filtrar fondos solo para usuarios no-admin (admin ve todos)
+  const fondosFiltrados = isAdmin 
+    ? fondos 
+    : compromisos.length > 0
+      ? fondos.filter(fondo => fondosUnicos.includes(fondo['Código Fondo']))
+      : [];
+  
+  // Filtrar series por fondo seleccionado Y por compromisos del usuario (para no-admin)
+  const seriesUnicasDelUsuario = Array.from(new Set(compromisos.map((c: Record<string, string | number>) => `${c['Fondo']}-${c['Serie']}`)));
+  
+  let seriesFiltradas;
+  if (isAdmin) {
+    // Admin: filtrar solo por fondo seleccionado
+    seriesFiltradas = selectedFondo 
+      ? series.filter(serie => serie['Fondo'] === selectedFondo)
+      : series;
+  } else {
+    // Usuario: filtrar por sus compromisos Y por fondo seleccionado
+    let baseFilter = series.filter(serie => seriesUnicasDelUsuario.includes(`${serie['Fondo']}-${serie['Serie']}`));
+    
+    if (selectedFondo) {
+      seriesFiltradas = baseFilter.filter(serie => serie['Fondo'] === selectedFondo);
+    } else {
+      seriesFiltradas = baseFilter;
+    }
+  }
 
   const compromisosFiltrados = selectedFondo
     ? compromisos.filter(compromiso => compromiso['Fondo'] === selectedFondo)
     : compromisos;
+
+  // Para usuarios no-admin: obtener los pools de sus fondos
+  const poolsDelUsuario = isAdmin 
+    ? poolFondos 
+    : fondosUnicos.length > 0 
+      ? poolFondos.filter(pool => fondosUnicos.includes(pool['Fondo']))
+      : [];
+
+  // Obtener IDs únicos de pools
+  const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map((p: Record<string, string | number>) => p['ID Pool'])));
+  
+  // Para usuarios: filtrar proyectos, características, avances por pool
+  const proyectosFiltrados = isAdmin 
+    ? proyectos 
+    : proyectos.filter(proyecto => {
+      // Necesitamos buscar en qué pool está el proyecto
+      // Por ahora, mostrar todos los proyectos relacionados con los fondos del usuario
+      return true; // TODO: Implementar lógica de pool
+    });
+  
+  const caracteristicasFiltradas = isAdmin 
+    ? caracteristicas 
+    : caracteristicas.filter((c: Record<string, string | number>) => 
+      proyectosFiltrados.some(p => p['ID Proyecto'] === c['ID Proyecto'])
+    );
+  
+  const avanceVentasFiltradas = isAdmin 
+    ? avanceVentas 
+    : avanceVentas.filter((a: Record<string, string | number>) => 
+      proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
+    );
+  
+  const avanceObraFiltradas = isAdmin 
+    ? avanceObra 
+    : avanceObra.filter((a: Record<string, string | number>) => 
+      proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
+    );
 
   if (loading) {
     return (
@@ -330,8 +416,8 @@ export default function Home() {
                 <Users className="h-8 w-8 text-purple-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Aportantes</p>
-                <p className="text-2xl font-semibold text-gray-900">{totalAportantes}</p>
+                <p className="text-sm font-medium text-gray-500">Capital Comprometido</p>
+                <p className="text-2xl font-semibold text-gray-900">${totalAportantesCapital.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -342,47 +428,17 @@ export default function Home() {
                 <DollarSign className="h-8 w-8 text-orange-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Avance General</p>
-                <p className="text-2xl font-semibold text-gray-900">{avanceGeneral.toFixed(1)}%</p>
+                <p className="text-sm font-medium text-gray-500">Capital Pagado</p>
+                <p className="text-2xl font-semibold text-gray-900">{capitalPagado.toLocaleString()} UF</p>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Filtro por Fondo */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Filtros</h2>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedFondo(null)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                selectedFondo === null
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              Todos los Fondos
-            </button>
-            {fondos.map(fondo => (
-              <button
-                key={fondo['Código Fondo']}
-                onClick={() => setSelectedFondo(fondo['Código Fondo'])}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                  selectedFondo === fondo['Código Fondo']
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {fondo['Código Fondo']}
-              </button>
-            ))}
           </div>
         </div>
 
         {/* Tabla de Fondos */}
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Fondos</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Fondos {!isAdmin ? 'del Usuario' : ''}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -397,7 +453,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {fondos.map((fondo, index) => (
+                {fondosFiltrados.map((fondo, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{fondo['Código Fondo']}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{fondo['Nombre']}</td>
@@ -492,9 +548,23 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Sección de Subyacentes */}
+        {/* Imagen de Estructura Pool 4 */}
+        <div className="bg-white rounded-lg shadow mb-8 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Estructura Pool 4</h2>
+          <div className="flex justify-center">
+            <img 
+              src="/estructura-pool-4.png" 
+              alt="Estructura Pool 4" 
+              className="max-w-full h-auto rounded-lg shadow-md"
+            />
+          </div>
+        </div>
+
+        {/* Sección de Subyacentes - Filtrada por pool del usuario */}
         <div className="border-t-4 border-blue-600 pt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Subyacentes</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            Subyacentes {!isAdmin && poolsDelUsuario.length > 0 ? `- Pool ${poolIdsUnicos.join(', ')}` : ''}
+          </h2>
 
         {/* Tabla de Proyectos */}
           <div className="bg-white rounded-lg shadow mb-8">
@@ -512,7 +582,7 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {proyectos.map((proyecto, index) => {
+                  {proyectosFiltrados.map((proyecto, index) => {
                     const inmobiliaria = inmobiliarias.find(i => i['ID Inmobiliaria'] === proyecto['ID Inmobiliaria']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
@@ -546,8 +616,8 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {caracteristicas.map((caracteristica, index) => {
-                    const proyecto = proyectos.find(p => p['ID Proyecto'] === caracteristica['ID Proyecto']);
+                  {caracteristicasFiltradas.map((caracteristica, index) => {
+                    const proyecto = proyectosFiltrados.find(p => p['ID Proyecto'] === caracteristica['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || caracteristica['ID Proyecto']}</td>
@@ -581,8 +651,8 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {avanceVentas.map((avance, index) => {
-                    const proyecto = proyectos.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
+                  {avanceVentasFiltradas.map((avance, index) => {
+                    const proyecto = proyectosFiltrados.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
@@ -612,8 +682,8 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {avanceObra.map((avance, index) => {
-                    const proyecto = proyectos.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
+                  {avanceObraFiltradas.map((avance, index) => {
+                    const proyecto = proyectosFiltrados.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
@@ -631,7 +701,8 @@ export default function Home() {
         <div className="border-t-4 border-green-600 pt-8 mt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Capital Calls & Returns</h2>
 
-          {/* Tabla de Pool Fondos */}
+          {/* Tabla de Pool Fondos - Solo para admin */}
+          {isAdmin && (
           <div className="bg-white rounded-lg shadow mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Pool Fondos</h3>
@@ -646,7 +717,7 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {poolFondos.map((pool, index) => (
+                  {poolsDelUsuario.map((pool, index) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{pool['ID Pool']}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{pool['Fondo']}</td>
@@ -657,8 +728,10 @@ export default function Home() {
               </table>
             </div>
           </div>
+          )}
 
-          {/* Tabla de Llamados de Capital */}
+          {/* Tabla de Llamados de Capital - Solo para admin */}
+          {isAdmin && (
           <div className="bg-white rounded-lg shadow mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Llamados de Capital</h3>
@@ -677,7 +750,9 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {llamadosCapital.map((llamado, index) => (
+                  {llamadosCapital
+                    .filter(llamado => isAdmin || fondosUnicos.includes(llamado['Fondo']))
+                    .map((llamado, index) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{llamado['ID Llamado']}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{llamado['Fondo']}</td>
@@ -708,63 +783,12 @@ export default function Home() {
               </table>
             </div>
           </div>
-
-          {/* Filtro por Aportante */}
-          <div className="bg-white rounded-lg shadow p-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Filtrar Aportes por Aportante</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedAportante(null)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                  selectedAportante === null
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Todos los Aportantes
-              </button>
-{(() => {
-                // Obtener los nombres únicos de los aportantes con aportes
-                const nombresUnicos = Array.from(new Set(
-                  aportesAportante.map(aporte => {
-                    const compromiso = compromisos.find(c => c['ID Aportante'] === aporte['ID Aportante']);
-                    return compromiso?.['Nombre Aportante'] || aporte['ID Aportante'];
-                  })
-                )).sort();
-                
-                return nombresUnicos.map((nombre, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      // Encontrar el ID del aportante por su nombre
-                      const compromiso = compromisos.find(c => c['Nombre Aportante'] === nombre);
-                      setSelectedAportante(compromiso?.['ID Aportante'] || null);
-                    }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                      (() => {
-                        const compromiso = compromisos.find(c => c['Nombre Aportante'] === nombre);
-                        return selectedAportante === compromiso?.['ID Aportante']
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300';
-                      })()
-                    }`}
-                  >
-                    {nombre}
-                  </button>
-                ));
-              })()}
-            </div>
-          </div>
+          )}
 
           {/* Tabla de Aportes por Aportante */}
           <div className="bg-white rounded-lg shadow">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Aportes por Aportante {selectedAportante ? `- ${(() => {
-                  const compromiso = compromisos.find(c => c['ID Aportante'] === selectedAportante);
-                  return compromiso?.['Nombre Aportante'] || selectedAportante;
-                })()}` : ''}
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">Aportes</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -782,9 +806,7 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {aportesAportante
-                    .filter(aporte => !selectedAportante || aporte['ID Aportante'] === selectedAportante)
-                    .map((aporte, index) => {
+                  {aportesAportante.map((aporte, index) => {
                       // Buscar el aportante en la tabla de compromisos si no está en aportantes
                       const compromiso = compromisos.find(c => c['ID Aportante'] === aporte['ID Aportante']);
                       const nombreAportante = compromiso?.['Nombre Aportante'] || aporte['ID Aportante'];
