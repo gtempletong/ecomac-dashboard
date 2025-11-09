@@ -350,7 +350,9 @@ export default function Home() {
   // Para usuarios: filtrar proyectos, características, avances por pool
   const proyectosFiltrados = isAdmin 
     ? proyectos 
-    : proyectos; // Mostrar todos los proyectos por ahora
+    : compromisos.length > 0
+      ? proyectos.filter(proyecto => fondosUnicos.includes(proyecto['Fondo']))
+      : [];
   
   const caracteristicasFiltradas = isAdmin 
     ? caracteristicas 
