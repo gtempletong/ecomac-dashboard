@@ -456,14 +456,23 @@ export default function Home() {
       proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
     );
 
-  const proyectosSinDuplicar = Array.from(
-    new Map(
-      proyectosFiltrados.map((proyecto) => {
-        const key = proyecto['ID Proyecto'] || proyecto['Nombre Proyecto'];
-        return [key, proyecto];
-      })
-    ).values()
-  );
+  const proyectosSinDuplicar = (() => {
+    const vistos = new Set<string>();
+    const resultado: Proyecto[] = [];
+
+    proyectosFiltrados.forEach((proyecto, index) => {
+      const idKey = proyecto['ID Proyecto'] ? String(proyecto['ID Proyecto']).trim() : '';
+      const nombreKey = proyecto['Nombre Proyecto'] ? String(proyecto['Nombre Proyecto']).trim() : '';
+      const clave = idKey || nombreKey || `idx-${index}`;
+
+      if (!vistos.has(clave)) {
+        vistos.add(clave);
+        resultado.push(proyecto);
+      }
+    });
+
+    return resultado;
+  })();
 
   const formatNumber = (value: number | string | undefined) => {
     if (value === undefined || value === null || value === '') {
