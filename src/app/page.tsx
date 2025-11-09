@@ -332,7 +332,11 @@ export default function Home() {
   // Para usuarios no-admin: obtener los pools de sus fondos
   const normalizeKey = (value: string | number | undefined | null) => {
     if (value === undefined || value === null) return '';
-    return String(value).toUpperCase().replace(/[\s\-_\.]/g, '');
+    return String(value)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
   };
 
   const poolsDelUsuario = isAdmin 
@@ -370,29 +374,53 @@ export default function Home() {
   // Para usuarios: filtrar proyectos, características, avances por pool
   const proyectosFiltrados = isAdmin 
     ? proyectos 
-    : proyectos.filter(proyecto => {
-        const fondoProyectoKey = normalizeKey(proyecto['Fondo']);
-        const fipProyectoKey = normalizeKey(proyecto['FIP']);
+    : (() => {
+        const filtrados = proyectos.filter(proyecto => {
+          const fondoProyectoKey = normalizeKey(proyecto['Fondo']);
+          const fipProyectoKey = normalizeKey(proyecto['FIP']);
 
-        const coincideFondo = fondosUsuarioNorm.some(fondoKey => 
-          fondoProyectoKey.includes(fondoKey) || fondoKey.includes(fondoProyectoKey)
-        );
+          const coincideFondo = fondosUsuarioNorm.some(fondoKey => 
+            fondoKey && fondoProyectoKey.includes(fondoKey)
+          );
 
-        const coincidePool = poolKeysUsuario.some(poolKey => {
-          const matchesId = poolKey.id && (fipProyectoKey.includes(poolKey.id) || poolKey.id.includes(fipProyectoKey));
-          const matchesNombre = poolKey.nombre && (
-            fipProyectoKey.includes(poolKey.nombre) || poolKey.nombre.includes(fipProyectoKey) ||
-            fondoProyectoKey.includes(poolKey.nombre) || poolKey.nombre.includes(fondoProyectoKey)
-          );
-          const matchesFondo = poolKey.fondo && (
-            fondoProyectoKey.includes(poolKey.fondo) || poolKey.fondo.includes(fondoProyectoKey) ||
-            fipProyectoKey.includes(poolKey.fondo) || poolKey.fondo.includes(fipProyectoKey)
-          );
-          return matchesId || matchesNombre || matchesFondo;
+          const coincidePool = poolKeysUsuario.some(poolKey => {
+            const matchesId = poolKey.id && fipProyectoKey.includes(poolKey.id);
+            const matchesNombre = poolKey.nombre && (
+              fipProyectoKey.includes(poolKey.nombre) || fondoProyectoKey.includes(poolKey.nombre)
+            );
+            const matchesFondo = poolKey.fondo && (
+              fondoProyectoKey.includes(poolKey.fondo) || fipProyectoKey.includes(poolKey.fondo)
+            );
+            return matchesId || matchesNombre || matchesFondo;
+          });
+
+          return coincideFondo || coincidePool;
         });
 
-        return coincideFondo || coincidePool;
-      });
+        if (filtrados.length > 0) return filtrados;
+
+        if (poolKeysUsuario.length > 0) {
+          const fallbackPorPool = proyectos.filter(proyecto => {
+            const fipProyectoKey = normalizeKey(proyecto['FIP']);
+            return poolKeysUsuario.some(poolKey => 
+              (poolKey.id && fipProyectoKey.includes(poolKey.id)) ||
+              (poolKey.nombre && fipProyectoKey.includes(poolKey.nombre)) ||
+              (poolKey.fondo && fipProyectoKey.includes(poolKey.fondo))
+            );
+          });
+          if (fallbackPorPool.length > 0) return fallbackPorPool;
+        }
+
+        if (fondosUsuarioNorm.length > 0) {
+          const fallbackPorFondo = proyectos.filter(proyecto => {
+            const fondoProyectoKey = normalizeKey(proyecto['Fondo']);
+            return fondosUsuarioNorm.some(fondoKey => fondoKey && fondoProyectoKey.includes(fondoKey));
+          });
+          if (fallbackPorFondo.length > 0) return fallbackPorFondo;
+        }
+
+        return [];
+      })();
 
   const subyacentesEtiqueta = (() => {
     if (isAdmin) return '';
@@ -1030,7 +1058,7 @@ export default function Home() {
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Aportes</h3>
               <button
-                onClick={descargarAportesExcel}
+                onClick={() => descargarAportesExcel()}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
               >
                 <Download className="h-4 w-4" />
