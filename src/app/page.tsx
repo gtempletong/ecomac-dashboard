@@ -330,10 +330,21 @@ export default function Home() {
   }
 
   // Para usuarios no-admin: obtener los pools de sus fondos
+  const normalizeKey = (value: string | number | undefined | null) => {
+    if (value === undefined || value === null) return '';
+    return String(value).toUpperCase().replace(/[\s\-_\.]/g, '');
+  };
+
   const poolsDelUsuario = isAdmin 
     ? poolFondos 
     : fondosUnicos.length > 0 
-      ? poolFondos.filter(pool => fondosUnicos.includes(pool['Fondo']))
+      ? poolFondos.filter(pool => {
+          const poolFondoKey = normalizeKey(pool['Fondo']);
+          return fondosUnicos.some(fondo => {
+            const fondoKey = normalizeKey(fondo);
+            return poolFondoKey.includes(fondoKey) || fondoKey.includes(poolFondoKey);
+          });
+        })
       : [];
 
   console.log('🔍 DEBUG Pool Fondos:', {
@@ -346,22 +357,50 @@ export default function Home() {
 
   // Obtener IDs únicos de pools
   const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['ID Pool'])));
+  const poolNombreUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['Nombre Pool']).filter(Boolean)));
+  const poolFondosUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['Fondo']).filter(Boolean)));
+
+  const fondosUsuarioNorm = fondosUnicos.map(normalizeKey).filter(Boolean);
+  const poolKeysUsuario = poolsDelUsuario.map(pool => ({
+    id: normalizeKey(pool['ID Pool']),
+    nombre: normalizeKey(pool['Nombre Pool']),
+    fondo: normalizeKey(pool['Fondo'])
+  }));
   
   // Para usuarios: filtrar proyectos, características, avances por pool
-  const poolIdsUsuario = poolIdsUnicos.map(id => (typeof id === 'string' ? id.trim() : id));
-  const fondosUsuario = fondosUnicos.map(f => (typeof f === 'string' ? f.trim() : f));
-
   const proyectosFiltrados = isAdmin 
     ? proyectos 
     : proyectos.filter(proyecto => {
-        const fondoProyecto = typeof proyecto['Fondo'] === 'string' ? proyecto['Fondo'].trim() : proyecto['Fondo'];
-        const fipProyecto = typeof proyecto['FIP'] === 'string' ? proyecto['FIP'].trim() : proyecto['FIP'];
+        const fondoProyectoKey = normalizeKey(proyecto['Fondo']);
+        const fipProyectoKey = normalizeKey(proyecto['FIP']);
 
-        const coincideFondo = fondosUsuario.includes(fondoProyecto);
-        const coincidePool = poolIdsUsuario.includes(fipProyecto);
+        const coincideFondo = fondosUsuarioNorm.some(fondoKey => 
+          fondoProyectoKey.includes(fondoKey) || fondoKey.includes(fondoProyectoKey)
+        );
+
+        const coincidePool = poolKeysUsuario.some(poolKey => {
+          const matchesId = poolKey.id && (fipProyectoKey.includes(poolKey.id) || poolKey.id.includes(fipProyectoKey));
+          const matchesNombre = poolKey.nombre && (
+            fipProyectoKey.includes(poolKey.nombre) || poolKey.nombre.includes(fipProyectoKey) ||
+            fondoProyectoKey.includes(poolKey.nombre) || poolKey.nombre.includes(fondoProyectoKey)
+          );
+          const matchesFondo = poolKey.fondo && (
+            fondoProyectoKey.includes(poolKey.fondo) || poolKey.fondo.includes(fondoProyectoKey) ||
+            fipProyectoKey.includes(poolKey.fondo) || poolKey.fondo.includes(fipProyectoKey)
+          );
+          return matchesId || matchesNombre || matchesFondo;
+        });
 
         return coincideFondo || coincidePool;
       });
+
+  const subyacentesEtiqueta = (() => {
+    if (isAdmin) return '';
+    if (poolNombreUnicos.length > 0) return `- ${poolNombreUnicos.join(', ')}`;
+    if (poolFondosUnicos.length > 0) return `- Fondos ${poolFondosUnicos.join(', ')}`;
+    if (fondosUnicos.length > 0) return `- Fondos ${fondosUnicos.join(', ')}`;
+    return '';
+  })();
   
   const caracteristicasFiltradas = isAdmin 
     ? caracteristicas 
@@ -715,7 +754,7 @@ export default function Home() {
         {/* Sección de Subyacentes - Filtrada por pool del usuario */}
         <div className="border-t-4 border-blue-600 pt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            Subyacentes {!isAdmin && poolsDelUsuario.length > 0 ? `- Pool ${poolIdsUnicos.join(', ')}` : ''}
+            Subyacentes {subyacentesEtiqueta}
           </h2>
 
         {/* Tabla de Proyectos */}
