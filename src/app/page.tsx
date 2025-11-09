@@ -284,10 +284,9 @@ export default function Home() {
       : 0;
   
   // Capital pagado = suma de todos los aportes (montos positivos) hasta la fecha
-  const capitalPagado = aportesAportante.reduce((sum, aporte) => {
-    const montoUF = parseChileanNumber(aporte['Monto (UF)']);
-    return sum + (montoUF > 0 ? montoUF : 0);
-  }, 0);
+  const capitalPagado = isAdmin
+    ? fondos.reduce((sum, fondo) => sum + parseChileanNumber(fondo['Equity Aportado']), 0)
+    : compromisos.reduce((sum, compromiso) => sum + parseChileanNumber(compromiso['Equity Aportado']), 0);
   
   // Para la tarjeta de aportantes, mostrar el total de capital comprometido
   const totalAportantesCapital = capitalTotalComprometido;
@@ -594,7 +593,7 @@ export default function Home() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Capital Pagado</p>
-                <p className="text-2xl font-semibold text-gray-900">{capitalPagado.toLocaleString()} UF</p>
+                <p className="text-2xl font-semibold text-gray-900">${capitalPagado.toLocaleString()}</p>
               </div>
             </div>
           </div>
