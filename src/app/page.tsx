@@ -816,14 +816,31 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
+                  {proyectosSinDuplicar.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-6 text-center text-sm text-gray-500 italic">
+                        No se encontraron proyectos para los filtros actuales.
+                      </td>
+                    </tr>
+                  )}
                   {proyectosSinDuplicar.map((proyecto, index) => {
                     const caracteristica = caracteristicasFiltradas.find(c => c['ID Proyecto'] === proyecto['ID Proyecto']);
+                    const avanceRelacionado = avanceVentasFiltradas.find(a => a['ID Proyecto'] === proyecto['ID Proyecto']);
+
+                    const nombreProyecto = proyecto['Nombre Proyecto'] 
+                      || proyecto['ID Proyecto'] 
+                      || avanceRelacionado?.['ID Proyecto'] 
+                      || 'Sin nombre';
+                    const nombreInmobiliaria = proyecto['Nombre Inmobiliaria'] || '—';
+                    const comuna = proyecto['Comuna'] || '—';
+                    const region = proyecto['Región'] || '—';
+
                     return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto['Nombre Proyecto']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Nombre Inmobiliaria']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Comuna']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Región']}</td>
+                      <tr key={`${nombreProyecto}-${index}`} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{nombreProyecto}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{nombreInmobiliaria}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{comuna}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{region}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Edificios'])}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Pisos'])}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Deptos/Piso'])}</td>
