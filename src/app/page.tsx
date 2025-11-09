@@ -254,6 +254,14 @@ export default function Home() {
     }
   };
 
+  const parseChileanNumber = (value: string | number) => {
+    if (typeof value === 'number') return value;
+    if (!value) return 0;
+    const cleaned = String(value).replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   // Calcular métricas generales
   const isAdmin = user?.role === 'admin';
   
@@ -270,15 +278,16 @@ export default function Home() {
   
   // Capital comprometido basado en compromisos del usuario
   const capitalTotalComprometido = isAdmin 
-    ? fondos.reduce((sum, fondo) => sum + (fondo['Capital Comprometido ($)'] || 0), 0)
+    ? fondos.reduce((sum, fondo) => sum + parseChileanNumber(fondo['Capital Comprometido ($)']), 0)
     : compromisos.length > 0 
-      ? compromisos.reduce((sum, c) => sum + (Number(c['Capital Comprometido ($)']) || 0), 0)
+      ? compromisos.reduce((sum, c) => sum + parseChileanNumber(c['Capital Comprometido ($)']), 0)
       : 0;
   
   // Capital pagado = suma de todos los aportes (montos positivos) hasta la fecha
-  const capitalPagado = isAdmin
-    ? aportesAportante.reduce((sum, aporte) => sum + (aporte['Monto (UF)'] > 0 ? Number(aporte['Monto (UF)']) : 0), 0)
-    : aportesAportante.reduce((sum, aporte) => sum + (aporte['Monto (UF)'] > 0 ? Number(aporte['Monto (UF)']) : 0), 0);
+  const capitalPagado = aportesAportante.reduce((sum, aporte) => {
+    const montoUF = parseChileanNumber(aporte['Monto (UF)']);
+    return sum + (montoUF > 0 ? montoUF : 0);
+  }, 0);
   
   // Para la tarjeta de aportantes, mostrar el total de capital comprometido
   const totalAportantesCapital = capitalTotalComprometido;
@@ -466,13 +475,6 @@ export default function Home() {
       return numericValue.toLocaleString();
     }
     return String(value);
-  };
-
-  const parseChileanNumber = (value: string | number) => {
-    if (typeof value === 'number') return value;
-    if (!value) return 0;
-    const cleaned = String(value).replace(/\./g, '').replace(',', '.');
-    return parseFloat(cleaned);
   };
 
   const descargarAportesExcel = async (aportes?: AporteAportante[], nombreArchivo?: string) => {
