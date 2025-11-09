@@ -3,18 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Building2, TrendingUp, Users, DollarSign } from 'lucide-react';
+import { Building2, TrendingUp, Users, DollarSign, Download } from 'lucide-react';
 
 interface Fondo {
   'Código Fondo': string;
   'Nombre': string;
   'Tipo': string;
-  'Total Cuotas Comprometidas': number;
+  'Cuotas Comprometidas': number;
   'Capital Comprometido ($)': number;
-  'Total Cuotas Realizadas': number;
-  'Capital Realizado ($)': number;
-  'Avance Cuotas (%)': string;
-  'Avance Capital (%)': string;
+  'Cuotas Pagadas': number;
+  'Equity Aportado': number;
+  'Aportes Acumulados': string;
   'Estado': string;
 }
 
@@ -23,10 +22,9 @@ interface Serie {
   'Serie': string;
   'Cuotas Comprometidas': number;
   'Capital Comprometido ($)': number;
-  'Cuotas Realizadas': number;
-  'Capital Realizado ($)': number;
-  'Avance Cuotas (%)': string;
-  'Avance Capital (%)': string;
+  'Cuotas Pagadas': number;
+  'Equity Aportado': number;
+  'Aportes Acumulados': string | number;
   'Estado': string;
 }
 
@@ -46,10 +44,9 @@ interface Compromiso {
   'Nombre Aportante': string;
   'Cuotas Comprometidas': number;
   'Capital Comprometido ($)': number;
-  'Cuotas Realizadas': number;
-  'Capital Realizado ($)': number;
-  'Avance Cuotas (%)': string;
-  'Avance Capital (%)': string;
+  'Cuotas Pagadas': number;
+  'Equity Aportado': number;
+  'Aportes Acumulados': string | number;
   'Estado': string;
 }
 
@@ -59,8 +56,10 @@ interface Inmobiliaria {
 }
 
 interface Proyecto {
-  'ID Proyecto': string;
   'ID Inmobiliaria': string;
+  'Nombre Inmobiliaria': string;
+  'ID Proyecto': string;
+  'FIP': string;
   'Fondo': string;
   'Nombre Proyecto': string;
   'Comuna': string;
@@ -80,10 +79,12 @@ interface Caracteristica {
 interface AvanceVenta {
   'ID Avance': number;
   'ID Proyecto': string;
+  'UH Totales'?: number;
   'UH Promesadas': number;
-  'UH Vendidas': number;
+  'UH Escrituradas'?: number;
   'UH Stock': number;
-  'Avance Ventas (%)': number;
+  'Avance Ventas (%)': number | string;
+  'Avance Obra (%)'?: number | string;
 }
 
 interface AvanceObra {
@@ -102,22 +103,25 @@ interface PoolFondo {
 interface LlamadoCapital {
   'ID Llamado': number;
   'Fondo': string;
-  'Fecha': string;
-  'Monto (UF)': number;
+  'Fecha Llamado': string;
+  'Monto Total (UF)': number;
+  'Monto Total ($)': number;
   'Tipo': string;
   'Estado': string;
   'Descripción': string;
 }
 
 interface AporteAportante {
-  'ID Aporte': number;
   'ID Llamado': number;
   'Fondo': string;
   'Serie': string;
   'ID Aportante': string;
+  'NOMBRE APORTANTE': string;
+  'TIPO': string;
+  'MONTO (CLP)': number;
   'Monto (UF)': number;
   'Cuotas': number;
-  '% Respecto Promesa': string;
+  '% PROMESA': string | number;
   'Fecha Pago': string;
   'Estado': string;
 }
@@ -139,6 +143,12 @@ export default function Home() {
   const [aportesAportante, setAportesAportante] = useState<AporteAportante[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFondo] = useState<string | null>(null);
+  const [sortCompromisosBy, setSortCompromisosBy] = useState<'fondo' | 'aportante' | null>(null);
+  const [sortCompromisosOrder, setSortCompromisosOrder] = useState<'asc' | 'desc'>('asc');
+  const [filterLlamadoPool, setFilterLlamadoPool] = useState<string>('Todos');
+  const [filterLlamadoTipo, setFilterLlamadoTipo] = useState<string>('Todos');
+  const [expandedAportantes, setExpandedAportantes] = useState<Set<string>>(new Set());
+  const [filtrosAportante, setFiltrosAportante] = useState<Record<string, { fondo: string; tipo: string }>>({});
 
   useEffect(() => {
     // Verificar si hay sesión en sessionStorage (específico por pestaña)
@@ -164,7 +174,6 @@ export default function Home() {
         proyectosRes,
         caracteristicasRes,
         avanceVentasRes,
-        avanceObraRes,
         poolFondosRes,
         llamadosCapitalRes,
         aportesAportanteRes
@@ -177,7 +186,6 @@ export default function Home() {
         fetch('/api/proyectos'),
         fetch('/api/caracteristicas-proyectos'),
         fetch('/api/avance-ventas'),
-        fetch('/api/avance-obra'),
         fetch('/api/pool-fondos'),
         fetch('/api/llamados-capital'),
         fetch('/api/aportes-aportante')
@@ -191,7 +199,6 @@ export default function Home() {
       const proyectosData = await proyectosRes.json();
       const caracteristicasData = await caracteristicasRes.json();
       const avanceVentasData = await avanceVentasRes.json();
-      const avanceObraData = await avanceObraRes.json();
       const poolFondosData = await poolFondosRes.json();
       const llamadosCapitalData = await llamadosCapitalRes.json();
       
@@ -224,7 +231,7 @@ export default function Home() {
       setProyectos(proyectosData.proyectos || []);
       setCaracteristicas(caracteristicasData.caracteristicas || []);
       setAvanceVentas(avanceVentasData.avanceVentas || []);
-      setAvanceObra(avanceObraData.avanceObra || []);
+      setAvanceObra([]); // Ya no usamos avance obra separado
       setPoolFondos(Array.isArray(poolFondosData) ? poolFondosData : []);
       setLlamadosCapital(Array.isArray(llamadosCapitalData) ? llamadosCapitalData : []);
       
@@ -303,9 +310,24 @@ export default function Home() {
     }
   }
 
-  const compromisosFiltrados = selectedFondo
+  let compromisosFiltrados = selectedFondo
     ? compromisos.filter(compromiso => compromiso['Fondo'] === selectedFondo)
     : compromisos;
+
+  // Aplicar ordenamiento
+  if (sortCompromisosBy) {
+    compromisosFiltrados = [...compromisosFiltrados].sort((a, b) => {
+      let compareValue = 0;
+      
+      if (sortCompromisosBy === 'fondo') {
+        compareValue = a['Fondo'].localeCompare(b['Fondo']);
+      } else if (sortCompromisosBy === 'aportante') {
+        compareValue = a['Nombre Aportante'].localeCompare(b['Nombre Aportante']);
+      }
+      
+      return sortCompromisosOrder === 'asc' ? compareValue : -compareValue;
+    });
+  }
 
   // Para usuarios no-admin: obtener los pools de sus fondos
   const poolsDelUsuario = isAdmin 
@@ -313,6 +335,14 @@ export default function Home() {
     : fondosUnicos.length > 0 
       ? poolFondos.filter(pool => fondosUnicos.includes(pool['Fondo']))
       : [];
+
+  console.log('🔍 DEBUG Pool Fondos:', {
+    isAdmin,
+    poolFondosLength: poolFondos.length,
+    poolsDelUsuarioLength: poolsDelUsuario.length,
+    poolFondos: poolFondos,
+    poolsDelUsuario: poolsDelUsuario
+  });
 
   // Obtener IDs únicos de pools
   const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['ID Pool'])));
@@ -340,6 +370,67 @@ export default function Home() {
       proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
     );
 
+  const proyectosSinDuplicar = Array.from(
+    new Map(
+      proyectosFiltrados.map((proyecto) => {
+        const key = proyecto['ID Proyecto'] || proyecto['Nombre Proyecto'];
+        return [key, proyecto];
+      })
+    ).values()
+  );
+
+  const formatNumber = (value: number | string | undefined) => {
+    if (value === undefined || value === null || value === '') {
+      return '-';
+    }
+    const numericValue = typeof value === 'number' ? value : Number(value);
+    if (Number.isFinite(numericValue)) {
+      return numericValue.toLocaleString();
+    }
+    return String(value);
+  };
+
+  const parseChileanNumber = (value: string | number) => {
+    if (typeof value === 'number') return value;
+    if (!value) return 0;
+    const cleaned = String(value).replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleaned);
+  };
+
+  const descargarAportesExcel = async (aportes?: AporteAportante[], nombreArchivo?: string) => {
+    const XLSX = await import('xlsx');
+    
+    const datosAExportar = aportes || aportesAportante;
+    
+    const normalizarNumero = (valor: string | number) => {
+      const numero = parseChileanNumber(valor);
+      return Number.isFinite(numero) ? numero : '';
+    };
+
+    const datosParaExportar = datosAExportar.map(aporte => ({
+      'ID Llamado': aporte['ID Llamado'],
+      'Fondo': aporte['Fondo'],
+      'Serie': aporte['Serie'],
+      'ID Aportante': aporte['ID Aportante'],
+      'Nombre Aportante': aporte['NOMBRE APORTANTE'],
+      'Tipo': aporte['TIPO'],
+      'Monto (CLP)': normalizarNumero(aporte['MONTO (CLP)']),
+      'Monto (UF)': normalizarNumero(aporte['Monto (UF)']),
+      'Cuotas': normalizarNumero(aporte['Cuotas']),
+      '% Promesa': aporte['% PROMESA'],
+      'Fecha Pago': aporte['Fecha Pago'],
+      'Estado': aporte['Estado']
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(datosParaExportar);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Aportes');
+
+    const fecha = new Date().toISOString().split('T')[0];
+    const archivo = nombreArchivo || `Aportes_Todos_${fecha}.xlsx`;
+    XLSX.writeFile(wb, archivo);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -352,7 +443,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <Building2 className="h-8 w-8 text-blue-600" />
@@ -377,7 +468,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Métricas Generales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
@@ -438,11 +529,14 @@ export default function Home() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código Fondo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Tipo</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
@@ -451,9 +545,12 @@ export default function Home() {
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{fondo['Código Fondo']}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{fondo['Nombre']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{fondo['Total Cuotas Comprometidas']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Tipo']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{fondo['Cuotas Comprometidas']?.toLocaleString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${fondo['Capital Comprometido ($)']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Avance Capital (%)']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{fondo['Cuotas Pagadas']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${fondo['Equity Aportado']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Aportes Acumulados']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         fondo['Estado'] === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -480,8 +577,10 @@ export default function Home() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serie</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
@@ -492,7 +591,9 @@ export default function Home() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Serie']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{serie['Cuotas Comprometidas']?.toLocaleString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${serie['Capital Comprometido ($)']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Avance Capital (%)']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{serie['Cuotas Pagadas']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${serie['Equity Aportado']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{typeof serie['Aportes Acumulados'] === 'number' ? `${(serie['Aportes Acumulados'] * 100).toFixed(2)}%` : serie['Aportes Acumulados']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         serie['Estado'] === 'ACTIVA' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -509,8 +610,38 @@ export default function Home() {
 
         {/* Tabla de Compromisos */}
         <div className="bg-white rounded-lg shadow mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">Compromisos por Aportante {selectedFondo ? `- ${selectedFondo}` : ''}</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (sortCompromisosBy === 'aportante' && sortCompromisosOrder === 'asc') {
+                    setSortCompromisosOrder('desc');
+                  } else {
+                    setSortCompromisosBy('aportante');
+                    setSortCompromisosOrder('asc');
+                  }
+                }}
+                className={`px-3 py-1 text-xs font-medium rounded ${
+                  sortCompromisosBy === 'aportante' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Ordenar por Nombre {sortCompromisosBy === 'aportante' ? (sortCompromisosOrder === 'asc' ? 'A-Z ↓' : 'Z-A ↑') : ''}
+              </button>
+              {sortCompromisosBy && (
+                <button
+                  onClick={() => {
+                    setSortCompromisosBy(null);
+                    setSortCompromisosOrder('asc');
+                  }}
+                  className="px-3 py-1 text-xs font-medium rounded bg-red-100 text-red-700 hover:bg-red-200"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -518,11 +649,15 @@ export default function Home() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serie</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aportante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RUT</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Aportante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RUT Aportante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre Aportante</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -530,11 +665,21 @@ export default function Home() {
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{compromiso['Fondo']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Serie']}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{compromiso['Nombre Aportante']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{compromiso['ID Aportante']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{compromiso['RUT Aportante']}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{compromiso['Nombre Aportante']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{compromiso['Cuotas Comprometidas']?.toLocaleString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${compromiso['Capital Comprometido ($)']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Avance Capital (%)']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{compromiso['Cuotas Pagadas']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${compromiso['Equity Aportado']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{typeof compromiso['Aportes Acumulados'] === 'number' ? `${(compromiso['Aportes Acumulados'] * 100).toFixed(2)}%` : compromiso['Aportes Acumulados']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        compromiso['Estado'] === 'VIGENTE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {compromiso['Estado']}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -565,7 +710,7 @@ export default function Home() {
         {/* Tabla de Proyectos */}
           <div className="bg-white rounded-lg shadow mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Proyectos</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Proyectos y Características</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -575,35 +720,6 @@ export default function Home() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inmobiliaria</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comuna</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Región</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {proyectosFiltrados.map((proyecto, index) => {
-                    const inmobiliaria = inmobiliarias.find(i => i['ID Inmobiliaria'] === proyecto['ID Inmobiliaria']);
-                    return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto['Nombre Proyecto']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{inmobiliaria?.Nombre || proyecto['ID Inmobiliaria']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Comuna']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Región']}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Tabla de Características */}
-          <div className="bg-white rounded-lg shadow mb-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Características de Proyectos</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyecto</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Edificios</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Pisos</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Deptos/Piso</th>
@@ -612,16 +728,19 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {caracteristicasFiltradas.map((caracteristica, index) => {
-                    const proyecto = proyectosFiltrados.find(p => p['ID Proyecto'] === caracteristica['ID Proyecto']);
+                  {proyectosSinDuplicar.map((proyecto, index) => {
+                    const caracteristica = caracteristicasFiltradas.find(c => c['ID Proyecto'] === proyecto['ID Proyecto']);
                     return (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || caracteristica['ID Proyecto']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{caracteristica['Edificios']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{caracteristica['Pisos']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{caracteristica['Deptos/Piso']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{caracteristica['UH Totales']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{caracteristica['Estacionamientos']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto['Nombre Proyecto']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Nombre Inmobiliaria']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Comuna']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{proyecto['Región']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Edificios'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Pisos'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Deptos/Piso'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(caracteristica?.['UH Totales'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(caracteristica?.['Estacionamientos'])}</td>
                       </tr>
                     );
                   })}
@@ -630,20 +749,22 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Tabla de Avance Ventas */}
+          {/* Tabla de Avance Ventas y Obras */}
           <div className="bg-white rounded-lg shadow mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Avance de Ventas</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Avance de Ventas y Obras</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyecto</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Totales</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Promesadas</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Vendidas</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Escrituradas</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Stock</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance (%)</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance Ventas (%)</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance Obra (%)</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -652,38 +773,12 @@ export default function Home() {
                     return (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{avance['UH Promesadas']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{avance['UH Vendidas']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{avance['UH Stock']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Totales'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Promesadas'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Escrituradas'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Stock'])}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{avance['Avance Ventas (%)']}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Tabla de Avance Obra */}
-          <div className="bg-white rounded-lg shadow mb-8">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Avance de Obra</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyecto</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance (%)</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {avanceObraFiltradas.map((avance, index) => {
-                    const proyecto = proyectosFiltrados.find(p => p['ID Proyecto'] === avance['ID Proyecto']);
-                    return (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{avance['Avance Obra (%)']}%</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{avance['Avance Obra (%)'] ? `${avance['Avance Obra (%)']}%` : '-'}</td>
                       </tr>
                     );
                   })}
@@ -730,32 +825,127 @@ export default function Home() {
           {isAdmin && (
           <div className="bg-white rounded-lg shadow mb-8">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Llamados de Capital</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Llamados de Capital</h3>
+                <div className="flex gap-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">Pool:</label>
+                    <select
+                      value={filterLlamadoPool}
+                      onChange={(e) => setFilterLlamadoPool(e.target.value)}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Todos">Todos</option>
+                      {Array.from(new Set(llamadosCapital.map(l => l['Fondo']))).sort().map(pool => (
+                        <option key={pool} value={pool}>{pool}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">Tipo:</label>
+                    <select
+                      value={filterLlamadoTipo}
+                      onChange={(e) => setFilterLlamadoTipo(e.target.value)}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Todos">Todos</option>
+                      <option value="LLAMADO">Llamado</option>
+                      <option value="DEVOLUCIÓN">Devolución</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pool</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto (UF)</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Llamado</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Llamado</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total (UF)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total ($)</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Tipo</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {llamadosCapital
-                    .filter(llamado => isAdmin || fondosUnicos.includes(llamado['Fondo']))
-                    .map((llamado, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
+                  {(() => {
+                    // Convertir strings con formato chileno a números
+                    const parseChileanNumber = (value: string | number) => {
+                      if (typeof value === 'number') return value;
+                      if (!value) return 0;
+                      const cleaned = String(value).replace(/\./g, '').replace(',', '.');
+                      return parseFloat(cleaned);
+                    };
+
+                    // Filtrar llamados
+                    const llamadosFiltrados = llamadosCapital.filter(llamado => {
+                      const rolFilter = isAdmin || fondosUnicos.includes(llamado['Fondo']);
+                      if (!rolFilter) return false;
+                      const poolFilter = filterLlamadoPool === 'Todos' || llamado['Fondo'] === filterLlamadoPool;
+                      const tipoFilter = filterLlamadoTipo === 'Todos' || llamado['Tipo'] === filterLlamadoTipo;
+                      return poolFilter && tipoFilter;
+                    });
+
+                    // Calcular totales
+                    const totalUF = llamadosFiltrados.reduce((sum, llamado) => 
+                      sum + parseChileanNumber(llamado['Monto Total (UF)']), 0
+                    );
+                    const totalPesos = llamadosFiltrados.reduce((sum, llamado) => 
+                      sum + parseChileanNumber(llamado['Monto Total ($)']), 0
+                    );
+
+                    return (
+                      <>
+                        {/* Fila de Totales */}
+                        <tr className="bg-blue-50 font-bold border-b-2 border-blue-200">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900" colSpan={3}>
+                            TOTALES ({llamadosFiltrados.length} registros)
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                            <span className={`${totalUF < 0 ? 'text-red-600' : 'text-green-600'} font-bold`}>
+                              {totalUF.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                            <span className={`${totalPesos < 0 ? 'text-red-600' : 'text-green-600'} font-bold`}>
+                              ${totalPesos.toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                          </td>
+                          <td colSpan={3}></td>
+                        </tr>
+                        
+                        {/* Filas de datos */}
+                        {llamadosFiltrados.map((llamado, index) => {
+                      // Convertir strings con formato chileno (coma decimal, punto miles) a números
+                      const parseChileanNumber = (value: string | number) => {
+                        if (typeof value === 'number') return value;
+                        if (!value) return 0;
+                        // Remover puntos (separador de miles) y reemplazar coma por punto (decimal)
+                        const cleaned = String(value).replace(/\./g, '').replace(',', '.');
+                        return parseFloat(cleaned);
+                      };
+                      
+                      const montoUF = parseChileanNumber(llamado['Monto Total (UF)']);
+                      const montoPesos = parseChileanNumber(llamado['Monto Total ($)']);
+                      const colorUF = montoUF < 0 ? 'text-red-600' : 'text-green-600';
+                      const colorPesos = montoPesos < 0 ? 'text-red-600' : 'text-green-600';
+                      
+                      return (
+                      <tr key={index} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{llamado['ID Llamado']}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{llamado['Fondo']}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{llamado['Fecha']}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
-                        <span className={llamado['Monto (UF)'] < 0 ? 'text-red-600' : 'text-green-600'}>
-                          {llamado['Monto (UF)']?.toLocaleString()}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{llamado['Fecha Llamado']}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                        <span className={`${colorUF} font-semibold`}>
+                          {llamado['Monto Total (UF)']?.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                        <span className={`${colorPesos} font-semibold`}>
+                          ${llamado['Monto Total ($)']?.toLocaleString()}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -767,14 +957,18 @@ export default function Home() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          llamado['Estado'] === 'PAGADO' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+                          llamado['Estado'] === 'REALIZADO' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {llamado['Estado']}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">{llamado['Descripción']}</td>
-                    </tr>
-                  ))}
+                      </tr>
+                      );
+                    })}
+                      </>
+                    );
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -783,53 +977,265 @@ export default function Home() {
 
           {/* Tabla de Aportes por Aportante */}
           <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Aportes</h3>
+              <button
+                onClick={descargarAportesExcel}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Descargar Excel
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Llamado</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serie</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aportante</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto (UF)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">% Promesa</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Pago</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre Aportante</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Aportes</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total (CLP)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total (UF)</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Totales</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {aportesAportante.map((aporte, index) => {
-                      // Buscar el aportante en la tabla de compromisos si no está en aportantes
-                      const compromiso = compromisos.find(c => c['ID Aportante'] === aporte['ID Aportante']);
-                      const nombreAportante = compromiso?.['Nombre Aportante'] || aporte['ID Aportante'];
+                  {(() => {
+                    // Agrupar aportes por aportante
+                    const aportesAgrupados = aportesAportante.reduce((acc, aporte) => {
+                      const idAportante = aporte['ID Aportante'];
+                      const nombreAportante = aporte['NOMBRE APORTANTE'];
+                      
+                      if (!acc[idAportante]) {
+                        acc[idAportante] = {
+                          idAportante,
+                          nombreAportante,
+                          totalAportes: 0,
+                          montoCLPTotal: 0,
+                          montoUFTotal: 0,
+                          cuotasTotales: 0,
+                          detalles: []
+                        };
+                      }
+                      
+                      acc[idAportante].totalAportes++;
+                      acc[idAportante].montoCLPTotal += parseChileanNumber(aporte['MONTO (CLP)']);
+                      acc[idAportante].montoUFTotal += Number(aporte['Monto (UF)']) || 0;
+                      acc[idAportante].cuotasTotales += parseChileanNumber(aporte['Cuotas']);
+                      acc[idAportante].detalles.push(aporte);
+                      
+                      return acc;
+                    }, {} as Record<string, {
+                      idAportante: string;
+                      nombreAportante: string;
+                      totalAportes: number;
+                      montoCLPTotal: number;
+                      montoUFTotal: number;
+                      cuotasTotales: number;
+                      detalles: AporteAportante[];
+                    }>);
+
+                    const toggleAportante = (idAportante: string) => {
+                      const newExpanded = new Set(expandedAportantes);
+                      if (newExpanded.has(idAportante)) {
+                        newExpanded.delete(idAportante);
+                      } else {
+                        newExpanded.add(idAportante);
+                      }
+                      setExpandedAportantes(newExpanded);
+                    };
+
+                    return Object.values(aportesAgrupados).map((grupo) => {
+                      const isExpanded = expandedAportantes.has(grupo.idAportante);
+                      
                       return (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{aporte['ID Llamado']}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{aporte['Fondo']}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{aporte['Serie']}</td>
-                          <td className="px-6 py-4 text-sm text-gray-500">{nombreAportante}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                            <span className={aporte['Monto (UF)'] < 0 ? 'text-red-600' : 'text-green-600'}>
-                              {aporte['Monto (UF)']?.toLocaleString()}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{aporte['Cuotas']?.toLocaleString()}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{aporte['% Respecto Promesa']}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{aporte['Fecha Pago']}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              aporte['Estado'] === 'PAGADO' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {aporte['Estado']}
-                            </span>
-                          </td>
-                        </tr>
+                        <>
+                          {/* Fila agrupada */}
+                          <tr className="bg-gray-50 hover:bg-gray-100 font-semibold">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                              <span className="text-blue-600 text-lg">{isExpanded ? '▼' : '▶'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                              <div className="flex items-center justify-between">
+                                <span>{grupo.nombreAportante}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const fecha = new Date().toISOString().split('T')[0];
+                                    const nombreLimpio = grupo.nombreAportante.replace(/[^a-zA-Z0-9]/g, '_');
+                                    descargarAportesExcel(grupo.detalles, `Aportes_${nombreLimpio}_${fecha}.xlsx`);
+                                  }}
+                                  className="ml-3 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
+                                  title="Descargar aportes de este aportante"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Excel
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>{grupo.totalAportes}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                              <span className={grupo.montoCLPTotal < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
+                                ${grupo.montoCLPTotal.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                              <span className={grupo.montoUFTotal < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
+                                {grupo.montoUFTotal.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>{grupo.cuotasTotales.toLocaleString()}</td>
+                          </tr>
+                          
+                          {/* Filas de detalle */}
+                          {isExpanded && (
+                            <>
+                              {/* Barra de filtros */}
+                              <tr className="bg-gray-100">
+                                <td></td>
+                                <td colSpan={9} className="px-6 py-3">
+                                  <div className="flex gap-3 items-center">
+                                    <span className="text-sm font-medium text-gray-700">Filtrar:</span>
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs text-gray-600">Fondo:</label>
+                                      <select
+                                        value={filtrosAportante[grupo.idAportante]?.fondo || 'Todos'}
+                                        onChange={(e) => {
+                                          setFiltrosAportante({
+                                            ...filtrosAportante,
+                                            [grupo.idAportante]: {
+                                              ...filtrosAportante[grupo.idAportante],
+                                              fondo: e.target.value,
+                                              tipo: filtrosAportante[grupo.idAportante]?.tipo || 'Todos'
+                                            }
+                                          });
+                                        }}
+                                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <option value="Todos">Todos</option>
+                                        {Array.from(new Set(grupo.detalles.map(d => d['Fondo']))).sort().map(fondo => (
+                                          <option key={fondo} value={fondo}>{fondo}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs text-gray-600">Tipo:</label>
+                                      <select
+                                        value={filtrosAportante[grupo.idAportante]?.tipo || 'Todos'}
+                                        onChange={(e) => {
+                                          setFiltrosAportante({
+                                            ...filtrosAportante,
+                                            [grupo.idAportante]: {
+                                              ...filtrosAportante[grupo.idAportante],
+                                              fondo: filtrosAportante[grupo.idAportante]?.fondo || 'Todos',
+                                              tipo: e.target.value
+                                            }
+                                          });
+                                        }}
+                                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <option value="Todos">Todos</option>
+                                        <option value="Llamado">Llamados (negativos)</option>
+                                        <option value="Devolución">Devoluciones (positivos)</option>
+                                      </select>
+                                    </div>
+                                    {(filtrosAportante[grupo.idAportante]?.fondo !== 'Todos' || filtrosAportante[grupo.idAportante]?.tipo !== 'Todos') && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const newFiltros = { ...filtrosAportante };
+                                          delete newFiltros[grupo.idAportante];
+                                          setFiltrosAportante(newFiltros);
+                                        }}
+                                        className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                      >
+                                        Limpiar
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                              
+                              {/* Encabezado de detalle */}
+                              <tr className="bg-blue-50">
+                                <td></td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600">Fondo</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Serie</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Tipo</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-right">Monto (CLP)</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-right">Monto (UF)</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-right">Cuotas</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">% Promesa</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600">Fecha Pago</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Estado</td>
+                              </tr>
+                              {grupo.detalles
+                                .filter(aporte => {
+                                  const filtro = filtrosAportante[grupo.idAportante];
+                                  if (!filtro) return true;
+                                  
+                                  const fondoMatch = filtro.fondo === 'Todos' || aporte['Fondo'] === filtro.fondo;
+                                  
+                                  // Clasificar por signo del monto
+                                  let tipoMatch = true;
+                                  if (filtro.tipo !== 'Todos') {
+                                    const montoUF = Number(aporte['Monto (UF)']) || 0;
+                                    if (filtro.tipo === 'Llamado') {
+                                      tipoMatch = montoUF < 0; // Negativos = Llamados
+                                    } else if (filtro.tipo === 'Devolución') {
+                                      tipoMatch = montoUF > 0; // Positivos = Devoluciones
+                                    }
+                                  }
+                                  
+                                  return fondoMatch && tipoMatch;
+                                })
+                                .map((aporte, index) => (
+                                <tr key={`${grupo.idAportante}-${index}`} className="bg-white hover:bg-gray-50 border-l-4 border-blue-200">
+                                  <td></td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{aporte['Fondo']}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500">{aporte['Serie']}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-center">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                      aporte['TIPO'] === 'Llamado de Capital' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                                    }`}>
+                                      {aporte['TIPO']}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-right">
+                                    {(() => {
+                                      const montoCLP = parseChileanNumber(aporte['MONTO (CLP)']);
+                                      return (
+                                        <span className={montoCLP < 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                                          ${montoCLP.toLocaleString()}
+                                        </span>
+                                      );
+                                    })()}
+                                  </td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-right">
+                                    <span className={Number(aporte['Monto (UF)']) < 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                                      {Number(aporte['Monto (UF)'])?.toLocaleString()}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-500">{parseChileanNumber(aporte['Cuotas']).toLocaleString()}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500">{aporte['% PROMESA']}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{aporte['Fecha Pago']}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-center">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                      aporte['Estado'] === 'PAGADO' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {aporte['Estado']}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          )}
+                        </>
                       );
-                    })}
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
