@@ -348,11 +348,20 @@ export default function Home() {
   const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['ID Pool'])));
   
   // Para usuarios: filtrar proyectos, características, avances por pool
+  const poolIdsUsuario = poolIdsUnicos.map(id => (typeof id === 'string' ? id.trim() : id));
+  const fondosUsuario = fondosUnicos.map(f => (typeof f === 'string' ? f.trim() : f));
+
   const proyectosFiltrados = isAdmin 
     ? proyectos 
-    : compromisos.length > 0
-      ? proyectos.filter(proyecto => fondosUnicos.includes(proyecto['Fondo']))
-      : [];
+    : proyectos.filter(proyecto => {
+        const fondoProyecto = typeof proyecto['Fondo'] === 'string' ? proyecto['Fondo'].trim() : proyecto['Fondo'];
+        const fipProyecto = typeof proyecto['FIP'] === 'string' ? proyecto['FIP'].trim() : proyecto['FIP'];
+
+        const coincideFondo = fondosUsuario.includes(fondoProyecto);
+        const coincidePool = poolIdsUsuario.includes(fipProyecto);
+
+        return coincideFondo || coincidePool;
+      });
   
   const caracteristicasFiltradas = isAdmin 
     ? caracteristicas 
