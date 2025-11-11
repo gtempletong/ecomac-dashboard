@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Building2, TrendingUp, Users, DollarSign, Download } from 'lucide-react';
+import { Building2, Users, DollarSign, Download, X, ZoomIn } from 'lucide-react';
 
 interface Fondo {
   'Código Fondo': string;
@@ -20,6 +20,7 @@ interface Fondo {
 interface Serie {
   'Fondo': string;
   'Serie': string;
+  'Tipo'?: string;
   'Cuotas Comprometidas': number;
   'Capital Comprometido ($)': number;
   'Cuotas Pagadas': number;
@@ -149,6 +150,8 @@ export default function Home() {
   const [filterLlamadoTipo, setFilterLlamadoTipo] = useState<string>('Todos');
   const [expandedAportantes, setExpandedAportantes] = useState<Set<string>>(new Set());
   const [filtrosAportante, setFiltrosAportante] = useState<Record<string, { fondo: string; tipo: string }>>({});
+  const [showEstructuraModal, setShowEstructuraModal] = useState(false);
+  const [selectedEstructuraImage, setSelectedEstructuraImage] = useState('/estructura-pool-4.png');
 
   useEffect(() => {
     // Verificar si hay sesión en sessionStorage (específico por pestaña)
@@ -269,12 +272,7 @@ export default function Home() {
   const fondosUnicos = compromisos.length > 0 
     ? Array.from(new Set(compromisos.map(c => c['Fondo'])))
     : [];
-  const seriesDelUsuario = compromisos.length > 0
-    ? Array.from(new Set(compromisos.map(c => `${c['Fondo']}-${c['Serie']}`)))
-    : [];
-  
   const totalFondos = isAdmin ? fondos.length : fondosUnicos.length;
-  const totalSeries = isAdmin ? series.length : seriesDelUsuario.length;
   
   // Capital comprometido basado en compromisos del usuario
   const capitalTotalComprometido = isAdmin 
@@ -301,7 +299,7 @@ export default function Home() {
   // Filtrar series por fondo seleccionado Y por compromisos del usuario (para no-admin)
   const seriesUnicasDelUsuario = Array.from(new Set(compromisos.map(c => `${c['Fondo']}-${c['Serie']}`)));
   
-  let seriesFiltradas;
+  let seriesFiltradas: Serie[];
   if (isAdmin) {
     // Admin: filtrar solo por fondo seleccionado
     seriesFiltradas = selectedFondo 
@@ -347,6 +345,15 @@ export default function Home() {
       .replace(/[^A-Z0-9]/g, '');
   };
 
+  const seriesAgrupadas = seriesFiltradas.reduce((acc, serie) => {
+    const key = normalizeKey(serie['Fondo'] || (serie as unknown as Record<string, string | number>)['Código Fondo']);
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(serie);
+    return acc;
+  }, {} as Record<string, Serie[]>);
+
   const poolsDelUsuario = isAdmin 
     ? poolFondos 
     : fondosUnicos.length > 0 
@@ -371,6 +378,38 @@ export default function Home() {
   const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['ID Pool'])));
   const poolNombreUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['Nombre Pool']).filter(Boolean)));
   const poolFondosUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['Fondo']).filter(Boolean)));
+
+  const poolsUnicosParaUsuario = (() => {
+    if (isAdmin) return poolsDelUsuario;
+
+    const vistos = new Set<string>();
+    const resultado: PoolFondo[] = [];
+
+    poolsDelUsuario.forEach((pool) => {
+      const nombreKey = normalizeKey(pool['Nombre Pool']);
+      const idKey = normalizeKey(pool['ID Pool']);
+      const fondoKey = normalizeKey(pool['Fondo']);
+
+      const clave = nombreKey || idKey || fondoKey;
+
+      if (!clave) {
+        // Si no hay forma de identificarlo, igualmente lo mostramos una sola vez
+        const fallbackClave = `SIN_CLAVE_${resultado.length}`;
+        if (!vistos.has(fallbackClave)) {
+          vistos.add(fallbackClave);
+          resultado.push(pool);
+        }
+        return;
+      }
+
+      if (!vistos.has(clave)) {
+        vistos.add(clave);
+        resultado.push(pool);
+      }
+    });
+
+    return resultado;
+  })();
 
   const fondosUsuarioNorm = fondosUnicos.map(normalizeKey).filter(Boolean);
   const poolKeysUsuario = poolsDelUsuario.map(pool => ({
@@ -430,13 +469,13 @@ export default function Home() {
         return [];
       })();
 
-  const subyacentesEtiqueta = (() => {
-    if (isAdmin) return '';
-    if (poolNombreUnicos.length > 0) return `- ${poolNombreUnicos.join(', ')}`;
-    if (poolFondosUnicos.length > 0) return `- Fondos ${poolFondosUnicos.join(', ')}`;
-    if (fondosUnicos.length > 0) return `- Fondos ${fondosUnicos.join(', ')}`;
-    return '';
-  })();
+  const obtenerClaveProyecto = (proyecto: Proyecto, index: number) => {
+    const idKey = proyecto['ID Proyecto'] ? String(proyecto['ID Proyecto']).trim() : '';
+    const nombreKey = proyecto['Nombre Proyecto'] ? String(proyecto['Nombre Proyecto']).trim() : '';
+    return idKey || nombreKey || `idx-${index}`;
+  };
+
+  const subyacentesEtiqueta = isAdmin ? '' : '';
   
   const caracteristicasFiltradas = isAdmin 
     ? caracteristicas 
@@ -456,23 +495,33 @@ export default function Home() {
       proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
     );
 
-  const proyectosSinDuplicar = (() => {
+  const proyectoFipsMap = new Map<string, Set<string>>();
+  const proyectosAgrupados = (() => {
     const vistos = new Set<string>();
-    const resultado: Proyecto[] = [];
+    const resultado: { clave: string; proyecto: Proyecto }[] = [];
 
     proyectosFiltrados.forEach((proyecto, index) => {
-      const idKey = proyecto['ID Proyecto'] ? String(proyecto['ID Proyecto']).trim() : '';
-      const nombreKey = proyecto['Nombre Proyecto'] ? String(proyecto['Nombre Proyecto']).trim() : '';
-      const clave = idKey || nombreKey || `idx-${index}`;
+      const clave = obtenerClaveProyecto(proyecto, index);
+      const fipValor = (proyecto['FIP'] ?? proyecto['Fondo'] ?? '').toString().trim();
+
+      if (!proyectoFipsMap.has(clave)) {
+        proyectoFipsMap.set(clave, new Set());
+      }
+      if (fipValor) {
+        proyectoFipsMap.get(clave)!.add(fipValor);
+      }
 
       if (!vistos.has(clave)) {
         vistos.add(clave);
-        resultado.push(proyecto);
+        resultado.push({ clave, proyecto });
       }
     });
 
     return resultado;
   })();
+
+  const proyectosSinDuplicarClaves = proyectosAgrupados.map(item => item.clave);
+  const proyectosSinDuplicar = proyectosAgrupados.map(item => item.proyecto);
 
   const formatNumber = (value: number | string | undefined) => {
     if (value === undefined || value === null || value === '') {
@@ -558,7 +607,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Métricas Generales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -567,18 +616,6 @@ export default function Home() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Fondos</p>
                 <p className="text-2xl font-semibold text-gray-900">{totalFondos}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <TrendingUp className="h-8 w-8 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Total Series</p>
-                <p className="text-2xl font-semibold text-gray-900">{totalSeries}</p>
               </div>
             </div>
           </div>
@@ -604,97 +641,86 @@ export default function Home() {
                 <p className="text-sm font-medium text-gray-500">Capital Pagado</p>
                 <p className="text-2xl font-semibold text-gray-900">${capitalPagado.toLocaleString()}</p>
               </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Tabla de Fondos */}
+        {/* Tabla combinada de Fondos y Series */}
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Fondos {!isAdmin ? 'del Usuario' : ''}</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Información General {!isAdmin ? 'del Usuario' : ''}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código Fondo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Tipo</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {fondosFiltrados.map((fondo, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{fondo['Código Fondo']}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{fondo['Nombre']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Tipo']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{fondo['Cuotas Comprometidas']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${fondo['Capital Comprometido ($)']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{fondo['Cuotas Pagadas']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${fondo['Equity Aportado']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Aportes Acumulados']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        fondo['Estado'] === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {fondo['Estado']}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Tabla de Series */}
-        <div className="bg-white rounded-lg shadow mb-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Series {selectedFondo ? `- ${selectedFondo}` : ''}</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Nombre</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serie</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Tipo</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {seriesFiltradas.map((serie, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{serie['Fondo']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Serie']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{serie['Cuotas Comprometidas']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${serie['Capital Comprometido ($)']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{serie['Cuotas Pagadas']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${serie['Equity Aportado']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{typeof serie['Aportes Acumulados'] === 'number' ? `${(serie['Aportes Acumulados'] * 100).toFixed(2)}%` : serie['Aportes Acumulados']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        serie['Estado'] === 'ACTIVA' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {serie['Estado']}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {fondosFiltrados.map((fondo, index) => {
+                  const fondoKey = normalizeKey(fondo['Código Fondo'] || fondo['Nombre']);
+                  const seriesDelFondo = seriesAgrupadas[fondoKey] || [];
+                  return (
+                    <Fragment key={`${fondo['Código Fondo'] || fondo['Nombre']}-${index}`}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{fondo['Código Fondo']}</td>
+                        <td className="px-6 py-4 text-sm text-center text-gray-500">{fondo['Nombre']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">—</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Tipo']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Cuotas Comprometidas']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Cuotas Pagadas']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${fondo['Capital Comprometido ($)']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${fondo['Equity Aportado']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Aportes Acumulados']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            fondo['Estado'] === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {fondo['Estado']}
+                          </span>
+                        </td>
+                      </tr>
+                      {seriesDelFondo.map((serie, serieIndex) => (
+                        <tr key={`${fondo['Código Fondo'] || fondo['Nombre']}-${serie['Serie']}-${serieIndex}`} className="bg-gray-50 hover:bg-gray-100">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-left text-gray-400">↳</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-700">Serie {serie['Serie']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Serie']}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Tipo'] || 'Serie'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Cuotas Comprometidas']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Cuotas Pagadas']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${serie['Capital Comprometido ($)']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${serie['Equity Aportado']?.toLocaleString()}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
+                            {typeof serie['Aportes Acumulados'] === 'number'
+                              ? `${(serie['Aportes Acumulados'] * 100).toFixed(2)}%`
+                              : serie['Aportes Acumulados']}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              serie['Estado'] === 'ACTIVA' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {serie['Estado']}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
-          </div>
-        </div>
+              </div>
+              </div>
 
         {/* Tabla de Compromisos */}
         <div className="bg-white rounded-lg shadow mb-8">
@@ -735,38 +761,32 @@ export default function Home() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serie</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Aportante</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RUT Aportante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre Aportante</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Nombre Aportante</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Fondo</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Serie</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cuotas Comprometidas</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {compromisosFiltrados.map((compromiso, index) => (
                   <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{compromiso['Fondo']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-left text-gray-500">{compromiso['RUT Aportante']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Nombre Aportante']}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Fondo']}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Serie']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{compromiso['ID Aportante']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{compromiso['RUT Aportante']}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{compromiso['Nombre Aportante']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{compromiso['Cuotas Comprometidas']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${compromiso['Capital Comprometido ($)']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{compromiso['Cuotas Pagadas']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${compromiso['Equity Aportado']?.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{typeof compromiso['Aportes Acumulados'] === 'number' ? `${(compromiso['Aportes Acumulados'] * 100).toFixed(2)}%` : compromiso['Aportes Acumulados']}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        compromiso['Estado'] === 'VIGENTE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {compromiso['Estado']}
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Cuotas Comprometidas']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${compromiso['Capital Comprometido ($)']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{compromiso['Cuotas Pagadas']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${compromiso['Equity Aportado']?.toLocaleString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
+                      {typeof compromiso['Aportes Acumulados'] === 'number'
+                        ? `${(compromiso['Aportes Acumulados'] * 100).toFixed(2)}%`
+                        : compromiso['Aportes Acumulados']}
                     </td>
                   </tr>
                 ))}
@@ -775,24 +795,65 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Imagen de Estructura Pool 4 */}
+        {/* Galería de estructuras */}
         <div className="bg-white rounded-lg shadow mb-8 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Estructura Pool 4</h2>
-          <div className="flex justify-center">
-            <Image 
-              src="/estructura-pool-4.png" 
-              alt="Estructura Pool 4" 
-              width={1200}
-              height={800}
-              className="max-w-full h-auto rounded-lg shadow-md"
-            />
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Estructuras Pool</h2>
+          <div className="text-sm text-gray-600 mb-4">
+            {isAdmin
+              ? 'Vista de administrador: se muestran todas las estructuras disponibles.'
+              : 'Vista personalizada: mostrando estructuras asociadas a los pools del usuario.'}
           </div>
+          <div className="flex flex-wrap justify-center gap-14">
+            {(isAdmin
+              ? [
+                  { id: 'POOL4', titulo: 'Pool 4', src: '/estructura-pool-4.png' },
+                  { id: 'POOL5', titulo: 'Pool 5', src: '/estructura-pool-4.png' },
+                  { id: 'POOL6', titulo: 'Pool 6', src: '/estructura-pool-4.png' },
+                ]
+              : poolsUnicosParaUsuario.map((pool) => ({
+                  id: normalizeKey(pool['ID Pool'] || pool['Nombre Pool'] || pool['Fondo']),
+                  titulo: pool['Nombre Pool'] || pool['Fondo'] || 'Pool',
+                  src: '/estructura-pool-4.png',
+                }))
+            ).map((item) => (
+              <div key={item.id} className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEstructuraImage(item.src);
+                    setShowEstructuraModal(true);
+                  }}
+                  className="relative group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+                >
+                  <Image 
+                    src={item.src} 
+                    alt={`Estructura ${item.titulo}`} 
+                    width={320}
+                    height={200}
+                    className="w-72 h-auto rounded-lg shadow-md transition-transform group-hover:scale-105"
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent group-hover:border-blue-500/70 group-hover:bg-blue-500/5 transition-colors"></div>
+                  <div className="pointer-events-none absolute top-3 right-3 flex items-center gap-2 bg-white/90 text-blue-700 text-xs font-medium px-3 py-1 rounded-full shadow group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <ZoomIn className="h-4 w-4" />
+                    Ver grande
+                  </div>
+                </button>
+                <span className="text-sm font-medium text-gray-600">{item.titulo}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-sm text-gray-500">Haz clic en cualquiera de las miniaturas para verla en tamaño completo.</p>
+          {!isAdmin && poolsDelUsuario.length === 0 && (
+            <p className="mt-4 text-center text-sm text-gray-400 italic">
+              No se encontraron pools asociados a este usuario.
+            </p>
+          )}
         </div>
 
         {/* Sección de Subyacentes - Filtrada por pool del usuario */}
         <div className="border-t-4 border-blue-600 pt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            Subyacentes {subyacentesEtiqueta}
+            Subyacentes{subyacentesEtiqueta && isAdmin ? ` ${subyacentesEtiqueta}` : ''}
           </h2>
 
         {/* Tabla de Proyectos */}
@@ -804,15 +865,16 @@ export default function Home() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyecto</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inmobiliaria</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comuna</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Región</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">FIP</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inmobiliaria</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Proyecto</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Comuna</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Región</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Edificios</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Pisos</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Deptos/Piso</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Totales</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Estacionamientos</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">UH Totales</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estacionamientos</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -824,6 +886,8 @@ export default function Home() {
                     </tr>
                   )}
                   {proyectosSinDuplicar.map((proyecto, index) => {
+                    const claveProyecto = proyectosSinDuplicarClaves[index];
+                    const fipsRelacionados = Array.from(proyectoFipsMap.get(claveProyecto) ?? []);
                     const caracteristica = caracteristicasFiltradas.find(c => c['ID Proyecto'] === proyecto['ID Proyecto']);
                     const avanceRelacionado = avanceVentasFiltradas.find(a => a['ID Proyecto'] === proyecto['ID Proyecto']);
 
@@ -837,15 +901,18 @@ export default function Home() {
 
                     return (
                       <tr key={`${nombreProyecto}-${index}`} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{nombreProyecto}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{nombreInmobiliaria}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{comuna}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{region}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {fipsRelacionados.length > 0 ? fipsRelacionados.join(', ') : '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{nombreInmobiliaria}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{nombreProyecto}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{comuna}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{region}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Edificios'])}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Pisos'])}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Deptos/Piso'])}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(caracteristica?.['UH Totales'])}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(caracteristica?.['Estacionamientos'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['UH Totales'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Estacionamientos'])}</td>
                       </tr>
                     );
                   })}
@@ -864,10 +931,10 @@ export default function Home() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyecto</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Totales</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Promesadas</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Escrituradas</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">UH Stock</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">UH Totales</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">UH Promesadas</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">UH Escrituradas</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">UH Stock</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance Ventas (%)</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Avance Obra (%)</th>
                   </tr>
@@ -878,10 +945,10 @@ export default function Home() {
                     return (
                       <tr key={index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proyecto?.['Nombre Proyecto'] || avance['ID Proyecto']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Totales'])}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Promesadas'])}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Escrituradas'])}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatNumber(avance['UH Stock'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(avance['UH Totales'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(avance['UH Promesadas'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(avance['UH Escrituradas'])}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(avance['UH Stock'])}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{avance['Avance Ventas (%)']}%</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{avance['Avance Obra (%)'] ? `${avance['Avance Obra (%)']}%` : '-'}</td>
                       </tr>
@@ -908,7 +975,7 @@ export default function Home() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pool</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Fondo</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">% Participación</th>
                   </tr>
                 </thead>
@@ -916,7 +983,7 @@ export default function Home() {
                   {poolsDelUsuario.map((pool, index) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{pool['ID Pool']}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{pool['Fondo']}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{pool['Fondo']}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{pool['% Participación']}%</td>
                     </tr>
                   ))}
@@ -966,13 +1033,13 @@ export default function Home() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Llamado</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fondo</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Llamado</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total (UF)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total ($)</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Fondo</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Fecha Llamado</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Monto Total (UF)</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Monto Total ($)</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Tipo</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Descripción</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1006,15 +1073,15 @@ export default function Home() {
                       <>
                         {/* Fila de Totales */}
                         <tr className="bg-blue-50 font-bold border-b-2 border-blue-200">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900" colSpan={3}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-left" colSpan={3}>
                             TOTALES ({llamadosFiltrados.length} registros)
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                             <span className={`${totalUF < 0 ? 'text-red-600' : 'text-green-600'} font-bold`}>
                               {totalUF.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                             <span className={`${totalPesos < 0 ? 'text-red-600' : 'text-green-600'} font-bold`}>
                               ${totalPesos.toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
@@ -1040,15 +1107,15 @@ export default function Home() {
                       
                       return (
                       <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{llamado['ID Llamado']}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{llamado['Fondo']}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{llamado['Fecha Llamado']}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-left">{llamado['ID Llamado']}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{llamado['Fondo']}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{llamado['Fecha Llamado']}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                         <span className={`${colorUF} font-semibold`}>
                           {llamado['Monto Total (UF)']?.toLocaleString()}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                         <span className={`${colorPesos} font-semibold`}>
                           ${llamado['Monto Total ($)']?.toLocaleString()}
                         </span>
@@ -1067,7 +1134,7 @@ export default function Home() {
                           {llamado['Estado']}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{llamado['Descripción']}</td>
+                      <td className="px-6 py-4 text-sm text-center text-gray-500">{llamado['Descripción']}</td>
                       </tr>
                       );
                     })}
@@ -1097,11 +1164,11 @@ export default function Home() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12"></th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre Aportante</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Aportes</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total (CLP)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Total (UF)</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cuotas Totales</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Nombre Aportante</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total Aportes</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Monto Total (CLP)</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Monto Total (UF)</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cuotas Totales</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1157,11 +1224,11 @@ export default function Home() {
                         <>
                           {/* Fila agrupada */}
                           <tr className="bg-gray-50 hover:bg-gray-100 font-semibold">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-left cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
                               <span className="text-blue-600 text-lg">{isExpanded ? '▼' : '▶'}</span>
                             </td>
-                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
-                              <div className="flex items-center justify-between">
+                            <td className="px-6 py-4 text-sm font-semibold text-gray-900 cursor-pointer text-center" onClick={() => toggleAportante(grupo.idAportante)}>
+                              <div className="flex items-center justify-center gap-3">
                                 <span>{grupo.nombreAportante}</span>
                                 <button
                                   onClick={(e) => {
@@ -1170,7 +1237,7 @@ export default function Home() {
                                     const nombreLimpio = grupo.nombreAportante.replace(/[^a-zA-Z0-9]/g, '_');
                                     descargarAportesExcel(grupo.detalles, `Aportes_${nombreLimpio}_${fecha}.xlsx`);
                                   }}
-                                  className="ml-3 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
+                                  className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
                                   title="Descargar aportes de este aportante"
                                 >
                                   <Download className="h-3 w-3" />
@@ -1178,18 +1245,18 @@ export default function Home() {
                                 </button>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>{grupo.totalAportes}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-700 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>{grupo.totalAportes}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
                               <span className={grupo.montoCLPTotal < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
                                 ${grupo.montoCLPTotal.toLocaleString()}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>
                               <span className={grupo.montoUFTotal < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
                                 {grupo.montoUFTotal.toLocaleString()}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>{grupo.cuotasTotales.toLocaleString()}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-700 cursor-pointer" onClick={() => toggleAportante(grupo.idAportante)}>{grupo.cuotasTotales.toLocaleString()}</td>
                           </tr>
                           
                           {/* Filas de detalle */}
@@ -1266,14 +1333,14 @@ export default function Home() {
                               {/* Encabezado de detalle */}
                               <tr className="bg-blue-50">
                                 <td></td>
-                                <td className="px-6 py-2 text-xs font-medium text-gray-600">Fondo</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-left">Fondo</td>
                                 <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Serie</td>
                                 <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Tipo</td>
-                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-right">Monto (CLP)</td>
-                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-right">Monto (UF)</td>
-                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-right">Cuotas</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Monto (CLP)</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Monto (UF)</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Cuotas</td>
                                 <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">% Promesa</td>
-                                <td className="px-6 py-2 text-xs font-medium text-gray-600">Fecha Pago</td>
+                                <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Fecha Pago</td>
                                 <td className="px-6 py-2 text-xs font-medium text-gray-600 text-center">Estado</td>
                               </tr>
                               {grupo.detalles
@@ -1299,7 +1366,7 @@ export default function Home() {
                                 .map((aporte, index) => (
                                 <tr key={`${grupo.idAportante}-${index}`} className="bg-white hover:bg-gray-50 border-l-4 border-blue-200">
                                   <td></td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{aporte['Fondo']}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-left text-gray-500">{aporte['Fondo']}</td>
                                   <td className="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500">{aporte['Serie']}</td>
                                   <td className="px-6 py-3 whitespace-nowrap text-center">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -1308,7 +1375,7 @@ export default function Home() {
                                       {aporte['TIPO']}
                                     </span>
                                   </td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-right">
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center">
                                     {(() => {
                                       const montoCLP = parseChileanNumber(aporte['MONTO (CLP)']);
                                       return (
@@ -1318,14 +1385,14 @@ export default function Home() {
                                       );
                                     })()}
                                   </td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-right">
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center">
                                     <span className={Number(aporte['Monto (UF)']) < 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
                                       {Number(aporte['Monto (UF)'])?.toLocaleString()}
                                     </span>
                                   </td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-right text-gray-500">{parseChileanNumber(aporte['Cuotas']).toLocaleString()}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500">{parseChileanNumber(aporte['Cuotas']).toLocaleString()}</td>
                                   <td className="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500">{aporte['% PROMESA']}</td>
-                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{aporte['Fecha Pago']}</td>
+                                  <td className="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500">{aporte['Fecha Pago']}</td>
                                   <td className="px-6 py-3 whitespace-nowrap text-center">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                       aporte['Estado'] === 'PAGADO' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
@@ -1347,6 +1414,38 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {showEstructuraModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setShowEstructuraModal(false)}
+          role="presentation"
+        >
+          <div
+            className="relative bg-white rounded-lg shadow-2xl max-w-5xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowEstructuraModal(false)}
+              className="absolute top-3 right-3 rounded-full bg-white/80 p-2 text-gray-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="p-4">
+              <Image
+                src={selectedEstructuraImage}
+                alt="Estructura Pool ampliada"
+                width={1600}
+                height={1000}
+                className="w-full h-auto rounded-md"
+                priority
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
