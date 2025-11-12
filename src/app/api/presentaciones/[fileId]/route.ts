@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchDriveFile, readSheet } from '@/lib/googleSheets';
 
 export const runtime = 'nodejs';
@@ -20,10 +20,11 @@ const PRESENTACIONES_PERMITIDAS: Record<
 const SERIES_RESTRINGIDAS = new Set(['A', 'B']);
 
 export async function GET(
-  request: NextRequest,
-  context: { params: { fileId?: string } }
+  request: Request
 ) {
-  const { fileId } = context.params ?? {};
+  const url = new URL(request.url);
+  const segments = url.pathname.split('/');
+  const fileId = segments[segments.length - 1];
 
   if (!PRESENTACIONES_PERMITIDAS[fileId]) {
     return NextResponse.json({ error: 'Presentación no disponible' }, { status: 404 });

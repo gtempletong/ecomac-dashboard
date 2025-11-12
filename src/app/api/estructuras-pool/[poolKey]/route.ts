@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { fetchDriveFile } from '@/lib/googleSheets';
 
 export const runtime = 'nodejs';
@@ -24,11 +24,10 @@ const POOL_ESTRUCTURAS: Record<
   },
 };
 
-export async function GET(
-  _request: NextRequest,
-  context: { params: { poolKey?: string } }
-) {
-  const poolKey = context.params?.poolKey?.toUpperCase();
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const segments = url.pathname.split('/');
+  const poolKey = segments[segments.length - 1]?.toUpperCase();
   const poolConfig = POOL_ESTRUCTURAS[poolKey];
 
   if (!poolConfig) {
