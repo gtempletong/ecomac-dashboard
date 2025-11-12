@@ -19,10 +19,26 @@ export async function GET() {
     const series = (data as Record<string, string | number>[]).filter((row) => {
       const serieValue = row['Serie'] ?? row['Serie '];
       return serieValue !== undefined && String(serieValue).trim() !== '';
-    }).map((row) => ({
-      ...row,
-      Fondo: row['Fondo'] ?? row['Código Fondo'] ?? row['Codigo Fondo'] ?? ''
-    }));
+    }).map((row) => {
+      const tirValue =
+        row['TIR Estimada'] ??
+        row['TIR ESTIMADA'] ??
+        row['TIR en UF'] ??
+        row['TIR UF'] ??
+        row['tir estimada'] ??
+        row['tir_estimada'];
+
+      const normalizedRow = {
+        ...row,
+        Fondo: row['Fondo'] ?? row['Código Fondo'] ?? row['Codigo Fondo'] ?? ''
+      };
+
+      if (tirValue !== undefined && tirValue !== null && tirValue !== '') {
+        normalizedRow['TIR Estimada'] = tirValue;
+      }
+
+      return normalizedRow;
+    });
 
     return NextResponse.json({ series });
   } catch (error) {

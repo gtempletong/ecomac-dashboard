@@ -15,6 +15,10 @@ interface Fondo {
   'Equity Aportado': number;
   'Aportes Acumulados': string;
   'Estado': string;
+  'TIR Estimada'?: number | string;
+  'TIR en UF'?: number | string;
+  'TIR UF'?: number | string;
+  [key: string]: string | number | undefined;
 }
 
 interface Serie {
@@ -27,6 +31,10 @@ interface Serie {
   'Equity Aportado': number;
   'Aportes Acumulados': string | number;
   'Estado': string;
+  'TIR Estimada'?: number | string;
+  'TIR en UF'?: number | string;
+  'TIR UF'?: number | string;
+  [key: string]: string | number | undefined;
 }
 
 interface Aportante {
@@ -40,6 +48,7 @@ interface Aportante {
 interface Compromiso {
   'Fondo': string;
   'Serie': string;
+  'Serie '?: string;
   'ID Aportante': string;
   'RUT Aportante': string;
   'Nombre Aportante': string;
@@ -151,7 +160,7 @@ export default function Home() {
   const [expandedAportantes, setExpandedAportantes] = useState<Set<string>>(new Set());
   const [filtrosAportante, setFiltrosAportante] = useState<Record<string, { fondo: string; tipo: string }>>({});
   const [showEstructuraModal, setShowEstructuraModal] = useState(false);
-  const [selectedEstructuraImage, setSelectedEstructuraImage] = useState('/estructura-pool-4.png');
+  const [selectedEstructuraImage, setSelectedEstructuraImage] = useState<{ url: string; titulo: string } | null>(null);
 
   useEffect(() => {
     // Verificar si hay sesión en sessionStorage (específico por pestaña)
@@ -289,6 +298,41 @@ export default function Home() {
   // Para la tarjeta de aportantes, mostrar el total de capital comprometido
   const totalAportantesCapital = capitalTotalComprometido;
 
+  const usuarioTieneSeriesAyB = !isAdmin && compromisos.some((compromiso) => {
+    const serie = String(compromiso['Serie'] ?? compromiso['Serie '] ?? '')
+      .trim()
+      .toUpperCase();
+    return serie === 'A' || serie === 'B';
+  });
+
+  const puedeVerPresentaciones = Boolean(user) && (isAdmin || !usuarioTieneSeriesAyB);
+
+  const presentacionesDirectorio = [
+    {
+      id: '1E8Labv5XCsY2mL0l3JkjPCzf80FD3NRO',
+      titulo: 'Presentación Socios Pool 1-2-3',
+      descripcion: 'Documento informativo exclusivo para directorio.',
+    },
+    {
+      id: '1TWX_IKfch08HfTl8Pt6zpoaEf9sZ0-P1',
+      titulo: 'Presentación Socios Pool 4',
+      descripcion: 'Resumen complementario para reuniones del directorio.',
+    },
+  ];
+
+  const abrirPresentacion = (fileId: string) => {
+    if (!user) return;
+    const params = new URLSearchParams();
+    if (user.role) {
+      params.set('role', user.role);
+    }
+    if (user.rut) {
+      params.set('rut', user.rut);
+    }
+    const url = `/api/presentaciones/${fileId}?${params.toString()}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
   // Filtrar fondos solo para usuarios no-admin (admin ve todos)
   const fondosFiltrados = isAdmin 
     ? fondos 
@@ -417,6 +461,70 @@ export default function Home() {
     nombre: normalizeKey(pool['Nombre Pool']),
     fondo: normalizeKey(pool['Fondo'])
   }));
+
+  const estructurasCatalogo = [
+    {
+      poolKey: 'POOL2',
+      titulo: 'Pool 2',
+      driveId: '13kgytBSt7ZHns4mUUjdrP7QJ6OezhzUq',
+    },
+    {
+      poolKey: 'POOL3',
+      titulo: 'Pool 3',
+      driveId: '17GvJYl-2lhf782o4KQNg5QfwIddH-sz9',
+    },
+    {
+      poolKey: 'POOL4',
+      titulo: 'Pool 4',
+      driveId: '1pxtjBPR2elRkgTtfXMaLDfyUmlU_J395',
+    },
+  ];
+
+  const obtenerClavesPool = (pool: PoolFondo | Record<string, string | number>) => {
+    const posibles = [
+      pool['ID Pool'],
+      pool['Nombre Pool'],
+      (pool as Record<string, string | number>)['Pool'],
+      (pool as Record<string, string | number>)['Nombre'],
+      (pool as Record<string, string | number>)['ID'],
+      pool['Fondo'],
+    ];
+
+    return posibles
+      .map(valor => normalizeKey(valor as string | number | undefined))
+      .filter(Boolean);
+  };
+
+  const poolKeysUsuarioSet = new Set<string>();
+  poolsUnicosParaUsuario.forEach(pool => {
+    obtenerClavesPool(pool).forEach(clave => {
+      poolKeysUsuarioSet.add(clave);
+    });
+  });
+
+  const estructurasVisibles = isAdmin
+    ? estructurasCatalogo
+    : estructurasCatalogo.filter((estructura) => poolKeysUsuarioSet.has(estructura.poolKey));
+
+  const construirUrlEstructura = (poolKey: string) => {
+    const params = new URLSearchParams();
+    if (user?.role) {
+      params.set('role', user.role);
+    }
+    if (user?.rut) {
+      params.set('rut', user.rut);
+    }
+    const query = params.toString();
+    return query
+      ? `/api/estructuras-pool/${poolKey}?${query}`
+      : `/api/estructuras-pool/${poolKey}`;
+  };
+
+  const estructurasParaMostrar = estructurasVisibles.map((estructura) => ({
+    ...estructura,
+    id: estructura.poolKey,
+    url: construirUrlEstructura(estructura.poolKey),
+  }));
   
   // Para usuarios: filtrar proyectos, características, avances por pool
   const proyectosFiltrados = isAdmin 
@@ -534,6 +642,25 @@ export default function Home() {
     return String(value);
   };
 
+  const formatTirEnUf = (valor: number | string | undefined) => {
+    if (valor === undefined || valor === null || valor === '') {
+      return '—';
+    }
+
+    const parseValor = (input: number | string) => {
+      if (typeof input === 'number') return input;
+      const cleaned = input.replace('%', '').trim().replace(/\./g, '').replace(',', '.');
+      const parsed = parseFloat(cleaned);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+
+    const numero = parseValor(valor);
+    if (!Number.isFinite(numero)) return '—';
+
+    const porcentaje = numero > 1 ? numero : numero * 100;
+    return `${porcentaje.toFixed(2)}%`;
+  };
+
   const descargarAportesExcel = async (aportes?: AporteAportante[], nombreArchivo?: string) => {
     const XLSX = await import('xlsx');
     
@@ -649,7 +776,7 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Información General {!isAdmin ? 'del Usuario' : ''}</h2>
-          </div>
+              </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -662,14 +789,20 @@ export default function Home() {
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Cuotas Pagadas</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Capital Comprometido ($)</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Equity Aportado</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">TIR en UF</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aportes Acumulados</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {fondosFiltrados.map((fondo, index) => {
                   const fondoKey = normalizeKey(fondo['Código Fondo'] || fondo['Nombre']);
                   const seriesDelFondo = seriesAgrupadas[fondoKey] || [];
+                  const tirUfValor = formatTirEnUf(
+                    fondo['TIR Estimada'] ??
+                    fondo['TIR ESTIMADA'] ??
+                    fondo['TIR en UF'] ??
+                    fondo['TIR UF']
+                  );
                   return (
                     <Fragment key={`${fondo['Código Fondo'] || fondo['Nombre']}-${index}`}>
                       <tr className="hover:bg-gray-50">
@@ -681,14 +814,8 @@ export default function Home() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Cuotas Pagadas']?.toLocaleString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${fondo['Capital Comprometido ($)']?.toLocaleString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${fondo['Equity Aportado']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{tirUfValor}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{fondo['Aportes Acumulados']}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            fondo['Estado'] === 'ACTIVO' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {fondo['Estado']}
-                          </span>
-                        </td>
                       </tr>
                       {seriesDelFondo.map((serie, serieIndex) => (
                         <tr key={`${fondo['Código Fondo'] || fondo['Nombre']}-${serie['Serie']}-${serieIndex}`} className="bg-gray-50 hover:bg-gray-100">
@@ -700,17 +827,18 @@ export default function Home() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{serie['Cuotas Pagadas']?.toLocaleString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${serie['Capital Comprometido ($)']?.toLocaleString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${serie['Equity Aportado']?.toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
+                          {formatTirEnUf(
+                            serie['TIR Estimada'] ??
+                            serie['TIR ESTIMADA'] ??
+                            serie['TIR en UF'] ??
+                            serie['TIR UF']
+                          )}
+                        </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
                             {typeof serie['Aportes Acumulados'] === 'number'
                               ? `${(serie['Aportes Acumulados'] * 100).toFixed(2)}%`
                               : serie['Aportes Acumulados']}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              serie['Estado'] === 'ACTIVA' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {serie['Estado']}
-                            </span>
                           </td>
                         </tr>
                       ))}
@@ -720,7 +848,7 @@ export default function Home() {
               </tbody>
             </table>
               </div>
-              </div>
+            </div>
 
         {/* Tabla de Compromisos */}
         <div className="bg-white rounded-lg shadow mb-8">
@@ -804,33 +932,23 @@ export default function Home() {
               : 'Vista personalizada: mostrando estructuras asociadas a los pools del usuario.'}
           </div>
           <div className="flex flex-wrap justify-center gap-14">
-            {(isAdmin
-              ? [
-                  { id: 'POOL4', titulo: 'Pool 4', src: '/estructura-pool-4.png' },
-                  { id: 'POOL5', titulo: 'Pool 5', src: '/estructura-pool-4.png' },
-                  { id: 'POOL6', titulo: 'Pool 6', src: '/estructura-pool-4.png' },
-                ]
-              : poolsUnicosParaUsuario.map((pool) => ({
-                  id: normalizeKey(pool['ID Pool'] || pool['Nombre Pool'] || pool['Fondo']),
-                  titulo: pool['Nombre Pool'] || pool['Fondo'] || 'Pool',
-                  src: '/estructura-pool-4.png',
-                }))
-            ).map((item) => (
+            {estructurasParaMostrar.map((item) => (
               <div key={item.id} className="flex flex-col items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedEstructuraImage(item.src);
+                    setSelectedEstructuraImage({ url: item.url, titulo: item.titulo });
                     setShowEstructuraModal(true);
                   }}
                   className="relative group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
                 >
                   <Image 
-                    src={item.src} 
+                    src={item.url} 
                     alt={`Estructura ${item.titulo}`} 
                     width={320}
                     height={200}
                     className="w-72 h-auto rounded-lg shadow-md transition-transform group-hover:scale-105"
+                    unoptimized
                   />
                   <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent group-hover:border-blue-500/70 group-hover:bg-blue-500/5 transition-colors"></div>
                   <div className="pointer-events-none absolute top-3 right-3 flex items-center gap-2 bg-white/90 text-blue-700 text-xs font-medium px-3 py-1 rounded-full shadow group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -850,6 +968,41 @@ export default function Home() {
           )}
         </div>
 
+        {puedeVerPresentaciones && (
+          <div className="bg-white rounded-lg shadow mb-8">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Presentaciones Directorio</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {presentacionesDirectorio.map((presentacion) => (
+                <div
+                  key={presentacion.id}
+                  className="border border-gray-200 rounded-lg p-5 flex flex-col justify-between gap-4 hover:border-blue-400 transition-colors"
+                >
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      {presentacion.titulo}
+                    </h3>
+                    <p className="mt-2 text-sm text-gray-500">
+                      {presentacion.descripcion}
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => abrirPresentacion(presentacion.id)}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Ver PDF
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Sección de Subyacentes - Filtrada por pool del usuario */}
         <div className="border-t-4 border-blue-600 pt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -866,8 +1019,8 @@ export default function Home() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">FIP</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inmobiliaria</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Proyecto</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">ID Inmobiliaria</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">ID Proyecto</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Comuna</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Región</th>
                     <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Edificios</th>
@@ -891,21 +1044,23 @@ export default function Home() {
                     const caracteristica = caracteristicasFiltradas.find(c => c['ID Proyecto'] === proyecto['ID Proyecto']);
                     const avanceRelacionado = avanceVentasFiltradas.find(a => a['ID Proyecto'] === proyecto['ID Proyecto']);
 
-                    const nombreProyecto = proyecto['Nombre Proyecto'] 
-                      || proyecto['ID Proyecto'] 
+                    const idProyecto = proyecto['ID Proyecto'] 
                       || avanceRelacionado?.['ID Proyecto'] 
+                      || 'Sin ID';
+                    const nombreProyecto = proyecto['Nombre Proyecto'] 
+                      || idProyecto 
                       || 'Sin nombre';
-                    const nombreInmobiliaria = proyecto['Nombre Inmobiliaria'] || '—';
+                    const idInmobiliaria = proyecto['ID Inmobiliaria'] || '—';
                     const comuna = proyecto['Comuna'] || '—';
                     const region = proyecto['Región'] || '—';
 
                     return (
-                      <tr key={`${nombreProyecto}-${index}`} className="hover:bg-gray-50">
+                      <tr key={`${idProyecto}-${index}`} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {fipsRelacionados.length > 0 ? fipsRelacionados.join(', ') : '—'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{nombreInmobiliaria}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{nombreProyecto}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{idInmobiliaria}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{idProyecto}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{comuna}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{region}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">{formatNumber(caracteristica?.['Edificios'])}</td>
@@ -1415,7 +1570,7 @@ export default function Home() {
         </div>
       </main>
 
-      {showEstructuraModal && (
+      {showEstructuraModal && selectedEstructuraImage && (
         <div
           className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           onClick={() => setShowEstructuraModal(false)}
@@ -1435,11 +1590,12 @@ export default function Home() {
             </button>
             <div className="p-4">
               <Image
-                src={selectedEstructuraImage}
-                alt="Estructura Pool ampliada"
+                src={selectedEstructuraImage.url}
+                alt={`Estructura ${selectedEstructuraImage.titulo}`}
                 width={1600}
                 height={1000}
                 className="w-full h-auto rounded-md"
+                unoptimized
                 priority
               />
             </div>

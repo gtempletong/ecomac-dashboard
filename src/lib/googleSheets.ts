@@ -4,26 +4,57 @@ import fs from 'fs';
 
 const SPREADSHEET_ID = '12Kpl5i6pIqXcRZ4-rGV72j0U8mcUoXD2RgzWXW8T4ro';
 
-// Credenciales de la Service Account
-const getGoogleSheetsClient = () => {
-  let credentials;
-
-  // En producción (Vercel), usar variable de entorno
+const getCredentials = () => {
   if (process.env.GOOGLE_SHEETS_CREDENTIALS) {
-    credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS);
-  } else {
-    // En desarrollo local, leer del archivo google_credentials.json
-    const credentialsPath = path.join(process.cwd(), 'google_credentials.json');
-    const credentialsFile = fs.readFileSync(credentialsPath, 'utf8');
-    credentials = JSON.parse(credentialsFile);
+    return JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS);
   }
 
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
+  const credentialsPath = path.join(process.cwd(), 'google_credentials.json');
+  const credentialsFile = fs.readFileSync(credentialsPath, 'utf8');
+  return JSON.parse(credentialsFile);
+};
 
+export const getGoogleAuth = (scopes: string[]) => {
+  const credentials = getCredentials();
+
+  return new google.auth.GoogleAuth({
+    credentials,
+    scopes,
+  });
+};
+
+export const getGoogleSheetsClient = () => {
+  const auth = getGoogleAuth(['https://www.googleapis.com/auth/spreadsheets.readonly']);
   return google.sheets({ version: 'v4', auth });
+};
+
+export const getGoogleDriveClient = () => {
+  const auth = getGoogleAuth(['https://www.googleapis.com/auth/drive.readonly']);
+  return google.drive({ version: 'v3', auth });
+};
+
+export const fetchDriveFile = async (fileId: string) => {
+  const drive = getGoogleDriveClient();
+
+  const [metadataResponse, fileResponse] = await Promise.all([
+    drive.files.get({
+      fileId,
+      fields: 'mimeType, name',
+    }),
+    drive.files.get(
+      {
+        fileId,
+        alt: 'media',
+      },
+      { responseType: 'arraybuffer' }
+    ),
+  ]);
+
+  const buffer = Buffer.from(fileResponse.data as ArrayBuffer);
+  const mimeType = metadataResponse.data.mimeType || 'application/octet-stream';
+  const fileName = metadataResponse.data.name || 'archivo';
+
+  return { buffer, mimeType, fileName };
 };
 
 export const readSheet = async (sheetName: string) => {
