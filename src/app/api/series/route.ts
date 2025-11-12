@@ -28,7 +28,7 @@ export async function GET() {
         row['tir estimada'] ??
         row['tir_estimada'];
 
-      const normalizedRow = {
+      const normalizedRow: Record<string, string | number> = {
         ...row,
         Fondo: row['Fondo'] ?? row['Código Fondo'] ?? row['Codigo Fondo'] ?? ''
       };
