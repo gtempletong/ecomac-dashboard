@@ -19,20 +19,17 @@ const PRESENTACIONES_PERMITIDAS: Record<
 
 const SERIES_RESTRINGIDAS = new Set(['A', 'B']);
 
-export async function GET(
-  request: Request
-) {
-  const url = new URL(request.url);
-  const segments = url.pathname.split('/');
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url);
+  const segments = requestUrl.pathname.split('/');
   const fileId = segments[segments.length - 1];
 
   if (!PRESENTACIONES_PERMITIDAS[fileId]) {
     return NextResponse.json({ error: 'Presentación no disponible' }, { status: 404 });
   }
 
-  const url = new URL(request.url);
-  const role = (url.searchParams.get('role') || '').toLowerCase();
-  const rut = (url.searchParams.get('rut') || '').trim();
+  const role = (requestUrl.searchParams.get('role') || '').toLowerCase();
+  const rut = (requestUrl.searchParams.get('rut') || '').trim();
 
   const isAdmin = role === 'admin';
 
