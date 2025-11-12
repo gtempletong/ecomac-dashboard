@@ -25,10 +25,10 @@ const POOL_ESTRUCTURAS: Record<
 };
 
 export async function GET(
-  request: NextRequest,
-  context: any
+  _request: NextRequest,
+  { params }: { params: Record<string, string> }
 ) {
-  const poolKey = context?.params?.poolKey?.toUpperCase();
+  const poolKey = params?.poolKey?.toUpperCase();
   const poolConfig = POOL_ESTRUCTURAS[poolKey];
 
   if (!poolConfig) {

@@ -21,9 +21,9 @@ const SERIES_RESTRINGIDAS = new Set(['A', 'B']);
 
 export async function GET(
   request: NextRequest,
-  context: any
+  { params }: { params: Record<string, string> }
 ) {
-  const { fileId } = context?.params ?? {};
+  const { fileId } = params ?? {};
 
   if (!PRESENTACIONES_PERMITIDAS[fileId]) {
     return NextResponse.json({ error: 'Presentación no disponible' }, { status: 404 });
