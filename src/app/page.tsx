@@ -92,12 +92,6 @@ interface AvanceVenta {
   'Avance Obra (%)'?: number | string;
 }
 
-interface AvanceObra {
-  'ID Avance Obra': number;
-  'ID Proyecto': string;
-  'Avance Obra (%)': number;
-}
-
 interface PoolFondo {
   'ID Pool': string;
   'Nombre Pool': string;
@@ -141,7 +135,6 @@ export default function Home() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [caracteristicas, setCaracteristicas] = useState<Caracteristica[]>([]);
   const [avanceVentas, setAvanceVentas] = useState<AvanceVenta[]>([]);
-  const [avanceObra, setAvanceObra] = useState<AvanceObra[]>([]);
   const [poolFondos, setPoolFondos] = useState<PoolFondo[]>([]);
   const [llamadosCapital, setLlamadosCapital] = useState<LlamadoCapital[]>([]);
   const [aportesAportante, setAportesAportante] = useState<AporteAportante[]>([]);
@@ -233,7 +226,6 @@ export default function Home() {
       setProyectos(proyectosData.proyectos || []);
       setCaracteristicas(caracteristicasData.caracteristicas || []);
       setAvanceVentas(avanceVentasData.avanceVentas || []);
-      setAvanceObra([]); // Ya no usamos avance obra separado
       setPoolFondos(Array.isArray(poolFondosData) ? poolFondosData : []);
       setLlamadosCapital(Array.isArray(llamadosCapitalData) ? llamadosCapitalData : []);
       

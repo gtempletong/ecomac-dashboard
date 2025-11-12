@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, type RouteHandlerContext } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { fetchDriveFile, readSheet } from '@/lib/googleSheets';
 
 export const runtime = 'nodejs';
@@ -19,13 +19,11 @@ const PRESENTACIONES_PERMITIDAS: Record<
 
 const SERIES_RESTRINGIDAS = new Set(['A', 'B']);
 
-type PresentacionParams = { fileId: string };
-
 export async function GET(
   request: NextRequest,
-  context: RouteHandlerContext<PresentacionParams>
+  context: any
 ) {
-  const { fileId } = context.params;
+  const { fileId } = context?.params ?? {};
 
   if (!PRESENTACIONES_PERMITIDAS[fileId]) {
     return NextResponse.json({ error: 'Presentación no disponible' }, { status: 404 });
