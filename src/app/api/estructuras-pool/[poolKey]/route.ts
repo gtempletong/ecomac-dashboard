@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse, type RouteHandlerContext } from 'next/server';
 import { fetchDriveFile } from '@/lib/googleSheets';
 
 export const runtime = 'nodejs';
@@ -24,11 +24,13 @@ const POOL_ESTRUCTURAS: Record<
   },
 };
 
+type PoolParams = { poolKey: string };
+
 export async function GET(
-  request: Request,
-  { params }: { params: { poolKey: string } }
+  request: NextRequest,
+  context: RouteHandlerContext<PoolParams>
 ) {
-  const poolKey = params.poolKey?.toUpperCase();
+  const poolKey = context.params.poolKey?.toUpperCase();
   const poolConfig = POOL_ESTRUCTURAS[poolKey];
 
   if (!poolConfig) {

@@ -60,11 +60,6 @@ interface Compromiso {
   'Estado': string;
 }
 
-interface Inmobiliaria {
-  'ID Inmobiliaria': string;
-  'Nombre': string;
-}
-
 interface Proyecto {
   'ID Inmobiliaria': string;
   'Nombre Inmobiliaria': string;
@@ -143,7 +138,6 @@ export default function Home() {
   const [series, setSeries] = useState<Serie[]>([]);
   const [, setAportantes] = useState<Aportante[]>([]);
   const [compromisos, setCompromisos] = useState<Compromiso[]>([]);
-  const [inmobiliarias, setInmobiliarias] = useState<Inmobiliaria[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [caracteristicas, setCaracteristicas] = useState<Caracteristica[]>([]);
   const [avanceVentas, setAvanceVentas] = useState<AvanceVenta[]>([]);
@@ -182,7 +176,6 @@ export default function Home() {
         seriesRes, 
         aportantesRes, 
         compromisosRes,
-        inmobiliariasRes,
         proyectosRes,
         caracteristicasRes,
         avanceVentasRes,
@@ -194,7 +187,6 @@ export default function Home() {
         fetch('/api/series'),
         fetch('/api/aportantes'),
         fetch('/api/compromisos'),
-        fetch('/api/inmobiliarias'),
         fetch('/api/proyectos'),
         fetch('/api/caracteristicas-proyectos'),
         fetch('/api/avance-ventas'),
@@ -207,7 +199,6 @@ export default function Home() {
       const seriesData = await seriesRes.json();
       const aportantesData = await aportantesRes.json();
       const compromisosData = await compromisosRes.json();
-      const inmobiliariasData = await inmobiliariasRes.json();
       const proyectosData = await proyectosRes.json();
       const caracteristicasData = await caracteristicasRes.json();
       const avanceVentasData = await avanceVentasRes.json();
@@ -239,7 +230,6 @@ export default function Home() {
         setCompromisos(compromisosFiltrados);
         setAportantes([]); // No mostrar otros aportantes
       }
-      setInmobiliarias(inmobiliariasData.inmobiliarias || []);
       setProyectos(proyectosData.proyectos || []);
       setCaracteristicas(caracteristicasData.caracteristicas || []);
       setAvanceVentas(avanceVentasData.avanceVentas || []);
@@ -418,11 +408,6 @@ export default function Home() {
     poolsDelUsuario: poolsDelUsuario
   });
 
-  // Obtener IDs únicos de pools
-  const poolIdsUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['ID Pool'])));
-  const poolNombreUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['Nombre Pool']).filter(Boolean)));
-  const poolFondosUnicos = Array.from(new Set(poolsDelUsuario.map(p => p['Fondo']).filter(Boolean)));
-
   const poolsUnicosParaUsuario = (() => {
     if (isAdmin) return poolsDelUsuario;
 
@@ -597,12 +582,6 @@ export default function Home() {
       proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
     );
   
-  const avanceObraFiltradas = isAdmin 
-    ? avanceObra 
-    : avanceObra.filter(a => 
-      proyectosFiltrados.some(p => p['ID Proyecto'] === a['ID Proyecto'])
-    );
-
   const proyectoFipsMap = new Map<string, Set<string>>();
   const proyectosAgrupados = (() => {
     const vistos = new Set<string>();
@@ -1047,9 +1026,6 @@ export default function Home() {
                     const idProyecto = proyecto['ID Proyecto'] 
                       || avanceRelacionado?.['ID Proyecto'] 
                       || 'Sin ID';
-                    const nombreProyecto = proyecto['Nombre Proyecto'] 
-                      || idProyecto 
-                      || 'Sin nombre';
                     const idInmobiliaria = proyecto['ID Inmobiliaria'] || '—';
                     const comuna = proyecto['Comuna'] || '—';
                     const region = proyecto['Región'] || '—';
